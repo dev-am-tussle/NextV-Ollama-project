@@ -21,7 +21,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={"s"}>
+      {/* Note: removed stray className 's' that caused unpredictable base styling */}
+      <body className="min-h-screen w-full overflow-hidden antialiased">
         <AppProvider>
           <Suspense fallback={null}>{children}</Suspense>
         </AppProvider>

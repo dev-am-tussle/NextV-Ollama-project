@@ -63,7 +63,7 @@
 // filepath: src/services/ollamaService.js
 import { spawn } from "child_process";
 
-const ALLOWED_MODELS = ["gemma:2b"];
+const ALLOWED_MODELS = ["gemma:2b", "phi:2.7b"];
 
 // helper to remove ANSI escape codes (cursor hide/show, colors, etc.)
 function stripAnsiCodes(str) {

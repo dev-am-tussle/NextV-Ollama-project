@@ -5,6 +5,9 @@ import dotenv from "dotenv";
 import helmet from "helmet";
 import morgan from "morgan";
 import modelRoutes from "./routes/ollama.routes.js";
+import authRoutes from "./routes/auth.routes.js";
+import conversationRoutes from "./routes/conversation.routes.js";
+import { connectDB, closeDB } from "./config/ollama.db.js"; // DB helpers import
 
 dotenv.config();
 
@@ -14,30 +17,31 @@ const app = express();
 app.use(helmet());
 app.use(morgan("dev"));
 
-// CORS: during dev allow frontend origin via env, fallback to '*'
+// CORS
 const FRONTEND = process.env.FRONTEND_ORIGIN || "*";
 app.use(cors({ origin: FRONTEND }));
 
 // body parser
 app.use(express.json({ limit: "1mb" }));
 
-// health check
+// health
 app.get("/health", (req, res) => res.json({ status: "ok" }));
 
-// mount api
+// routes
 app.use("/api/v1/models", modelRoutes);
+app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/conversations", conversationRoutes);
 
 app.get("/", (req, res) => {
   res.json({ message: "Welcome to OpenWebUI Backend API" });
 });
-
 
 // 404
 app.use((req, res) => {
   res.status(404).json({ error: "Not found" });
 });
 
-// global error handler
+// error handler
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
   if (res.headersSent) return next(err);
@@ -45,20 +49,36 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3001;
-const server = app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
 
-// graceful shutdown
-process.on("SIGINT", () => {
-  console.log("SIGINT received — shutting down gracefully");
-  server.close(() => process.exit(0));
-});
+async function start() {
+  try {
+    await connectDB(); // <- yahi call karein
+    const server = app.listen(PORT, () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
 
-process.on("unhandledRejection", (err) => {
-  console.error("unhandledRejection:", err);
-});
-process.on("uncaughtException", (err) => {
-  console.error("uncaughtException:", err);
-  process.exit(1);
-});
+    const graceful = (signal) => {
+      console.log(`${signal} received — shutting down`);
+      server.close(async () => {
+        await closeDB();
+        process.exit(0);
+      });
+    };
+
+    process.on("SIGINT", graceful);
+    process.on("SIGTERM", graceful);
+
+    process.on("unhandledRejection", (err) => {
+      console.error("unhandledRejection:", err);
+    });
+    process.on("uncaughtException", (err) => {
+      console.error("uncaughtException:", err);
+      process.exit(1);
+    });
+  } catch (err) {
+    console.error("Startup failed:", err);
+    process.exit(1);
+  }
+}
+
+start();

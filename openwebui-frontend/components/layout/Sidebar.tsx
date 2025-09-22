@@ -1,21 +1,21 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { useApp } from "@/components/context/AppContext"
-import { useSidebar } from "@/hooks/useSidebar"
+} from "@/components/ui/dropdown-menu";
+import { useApp } from "@/components/context/AppContext";
+import { useSidebar } from "@/hooks/useSidebar";
 import {
   Menu,
   Plus,
@@ -28,18 +28,20 @@ import {
   Settings,
   LogOut,
   User,
-} from "lucide-react"
-import { cn } from "@/lib/utils"
-import { FileManager } from "@/components/ui/FileManager"
-import { PromptManager } from "@/components/ui/PromptManager"
-import { SettingsPanel } from "@/components/ui/SettingsPanel"
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { FileManager } from "@/components/ui/FileManager";
+import { PromptManager } from "@/components/ui/PromptManager";
+import { SettingsPanel } from "@/components/ui/SettingsPanel";
 
 export function Sidebar() {
-  const { state, dispatch } = useApp()
-  const { isCollapsed, toggleSidebar } = useSidebar()
-  const [searchQuery, setSearchQuery] = useState("")
+  const { state, dispatch } = useApp();
+  const { isCollapsed, toggleSidebar } = useSidebar();
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const filteredChats = state.chats.filter((chat) => chat.title.toLowerCase().includes(searchQuery.toLowerCase()))
+  const filteredChats = state.chats.filter((chat) =>
+    chat.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const createNewChat = () => {
     const newChat = {
@@ -48,62 +50,74 @@ export function Sidebar() {
       messages: [],
       createdAt: new Date(),
       updatedAt: new Date(),
-    }
-    dispatch({ type: "ADD_CHAT", payload: newChat })
-    dispatch({ type: "SET_CURRENT_CHAT", payload: newChat.id })
-  }
+    };
+    dispatch({ type: "ADD_CHAT", payload: newChat });
+    dispatch({ type: "SET_CURRENT_CHAT", payload: newChat.id });
+  };
 
   const selectChat = (chatId: string) => {
-    dispatch({ type: "SET_CURRENT_CHAT", payload: chatId })
-  }
+    dispatch({ type: "SET_CURRENT_CHAT", payload: chatId });
+  };
 
   const deleteChat = (chatId: string) => {
-    dispatch({ type: "DELETE_CHAT", payload: chatId })
-  }
+    dispatch({ type: "DELETE_CHAT", payload: chatId });
+  };
 
   const renameChat = (chatId: string, newTitle: string) => {
-    dispatch({ type: "UPDATE_CHAT", payload: { id: chatId, updates: { title: newTitle } } })
-  }
+    dispatch({
+      type: "UPDATE_CHAT",
+      payload: { id: chatId, updates: { title: newTitle } },
+    });
+  };
 
   return (
     <>
       {/* Mobile overlay */}
       <div
         className={cn(
-          "fixed inset-0 z-40 bg-black/50 transition-opacity lg:hidden",
-          !isCollapsed && "opacity-100" && "block",
-          isCollapsed && "opacity-0 pointer-events-none",
+          "fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 lg:hidden",
+          isCollapsed
+            ? "opacity-0 pointer-events-none"
+            : "opacity-100 pointer-events-auto"
         )}
+        aria-hidden={isCollapsed}
         onClick={toggleSidebar}
       />
 
       {/* Sidebar */}
       <div
         className={cn(
-          "fixed left-0 top-0 z-50 h-full bg-sidebar border-r border-sidebar-border transition-all duration-300 lg:relative lg:z-auto",
+          "fixed left-0 top-0 z-50 h-full bg-sidebar border-r border-sidebar-border transition-all duration-300 will-change-transform lg:relative lg:z-auto",
           // Desktop behavior
           "lg:block",
           isCollapsed ? "lg:w-16" : "lg:w-80",
           // Mobile behavior - enhanced responsive widths
           "lg:translate-x-0",
           isCollapsed ? "-translate-x-full lg:translate-x-0" : "translate-x-0",
-          "w-72 sm:w-80 md:w-80",
+          "w-72 sm:w-80 md:w-80"
         )}
       >
         <div className="flex h-full flex-col">
           {/* Header */}
           <div className="flex items-center justify-between p-3 sm:p-4 border-b border-sidebar-border">
-            <div className={cn("flex items-center gap-2 sm:gap-3", isCollapsed && "lg:justify-center")}>
+            <div
+              className={cn(
+                "flex items-center gap-2 sm:gap-3",
+                isCollapsed && "lg:justify-center"
+              )}
+            >
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={toggleSidebar}
-                className="text-sidebar-foreground hover:bg-sidebar-accent h-8 w-8 sm:h-9 sm:w-9"
+                className="text-sidebar-foreground hover:bg-sidebar-accent h-8 w-8 sm:h-9 sm:w-9 cursor-pointer"
               >
                 <Menu className="h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
               {!isCollapsed && (
-                <h1 className="text-base sm:text-lg font-semibold text-sidebar-foreground">OpenWebUI</h1>
+                <h1 className="text-base sm:text-lg font-semibold text-sidebar-foreground">
+                  OpenWebUI
+                </h1>
               )}
             </div>
           </div>
@@ -113,8 +127,8 @@ export function Sidebar() {
             <Button
               onClick={createNewChat}
               className={cn(
-                "w-full justify-start gap-2 sm:gap-3 bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90 h-9 sm:h-10 text-sm sm:text-base",
-                isCollapsed && "lg:w-auto lg:px-2",
+                "w-full justify-start gap-2 sm:gap-3 bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90 h-9 sm:h-10 text-sm sm:text-base cursor-pointer",
+                isCollapsed && "lg:w-auto lg:px-2"
               )}
             >
               <Plus className="h-4 w-4 flex-shrink-0" />
@@ -169,33 +183,37 @@ export function Sidebar() {
                 <Button
                   variant="ghost"
                   className={cn(
-                    "w-full justify-start gap-2 sm:gap-3 h-auto p-2 sm:p-3 text-sidebar-foreground hover:bg-sidebar-accent",
-                    isCollapsed && "lg:w-auto lg:px-3",
+                    "w-full justify-start gap-2 sm:gap-3 h-auto p-2 sm:p-3 text-sidebar-foreground hover:bg-sidebar-accent cursor-pointer",
+                    isCollapsed && "lg:w-auto lg:px-3"
                   )}
                 >
                   <Avatar className="h-7 w-7 sm:h-8 sm:w-8 flex-shrink-0">
                     <AvatarImage src="/diverse-user-avatars.png" />
-                    <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground">U</AvatarFallback>
+                    <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground">
+                      U
+                    </AvatarFallback>
                   </Avatar>
                   {!isCollapsed && (
                     <div className="flex-1 text-left">
                       <div className="text-sm font-medium">User</div>
-                      <div className="text-xs text-sidebar-foreground/70">user@example.com</div>
+                      <div className="text-xs text-sidebar-foreground/70">
+                        user@example.com
+                      </div>
                     </div>
                   )}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem>
+              <DropdownMenuContent align="end" className="w-56 z-50">
+                <DropdownMenuItem className="cursor-pointer">
                   <User className="mr-2 h-4 w-4" />
                   Profile
                 </DropdownMenuItem>
-                <DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer">
                   <Settings className="mr-2 h-4 w-4" />
                   Settings
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive">
+                <DropdownMenuItem className="text-destructive cursor-pointer">
                   <LogOut className="mr-2 h-4 w-4" />
                   Sign out
                 </DropdownMenuItem>
@@ -205,37 +223,44 @@ export function Sidebar() {
         </div>
       </div>
     </>
-  )
+  );
 }
 
 interface ChatItemProps {
-  chat: any
-  isActive: boolean
-  isCollapsed: boolean
-  onSelect: () => void
-  onDelete: () => void
-  onRename: (newTitle: string) => void
+  chat: any;
+  isActive: boolean;
+  isCollapsed: boolean;
+  onSelect: () => void;
+  onDelete: () => void;
+  onRename: (newTitle: string) => void;
 }
 
-function ChatItem({ chat, isActive, isCollapsed, onSelect, onDelete, onRename }: ChatItemProps) {
-  const [isEditing, setIsEditing] = useState(false)
-  const [editTitle, setEditTitle] = useState(chat.title)
+function ChatItem({
+  chat,
+  isActive,
+  isCollapsed,
+  onSelect,
+  onDelete,
+  onRename,
+}: ChatItemProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(chat.title);
 
   const handleRename = () => {
     if (editTitle.trim() && editTitle !== chat.title) {
-      onRename(editTitle.trim())
+      onRename(editTitle.trim());
     }
-    setIsEditing(false)
-  }
+    setIsEditing(false);
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
-      handleRename()
+      handleRename();
     } else if (e.key === "Escape") {
-      setEditTitle(chat.title)
-      setIsEditing(false)
+      setEditTitle(chat.title);
+      setIsEditing(false);
     }
-  }
+  };
 
   if (isCollapsed) {
     return (
@@ -243,12 +268,15 @@ function ChatItem({ chat, isActive, isCollapsed, onSelect, onDelete, onRename }:
         variant="ghost"
         size="icon"
         onClick={onSelect}
-        className={cn("w-full h-10 text-sidebar-foreground hover:bg-sidebar-accent", isActive && "bg-sidebar-accent")}
+        className={cn(
+          "w-full h-10 text-sidebar-foreground hover:bg-sidebar-accent cursor-pointer",
+          isActive && "bg-sidebar-accent"
+        )}
         title={chat.title}
       >
         <MessageSquare className="h-4 w-4" />
       </Button>
-    )
+    );
   }
 
   return (
@@ -256,7 +284,7 @@ function ChatItem({ chat, isActive, isCollapsed, onSelect, onDelete, onRename }:
       className={cn(
         "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors cursor-pointer",
         "text-sidebar-foreground hover:bg-sidebar-accent",
-        isActive && "bg-sidebar-accent",
+        isActive && "bg-sidebar-accent"
       )}
       onClick={onSelect}
     >
@@ -268,8 +296,9 @@ function ChatItem({ chat, isActive, isCollapsed, onSelect, onDelete, onRename }:
           onChange={(e) => setEditTitle(e.target.value)}
           onBlur={handleRename}
           onKeyDown={handleKeyDown}
-          className="flex-1 h-6 px-1 py-0 text-sm bg-transparent border-none focus:ring-1 focus:ring-sidebar-ring"
+          className="flex-1 h-6 px-1 py-0 text-sm bg-transparent border-none focus:ring-1 focus:ring-sidebar-ring cursor-text"
           autoFocus
+          onClick={(e) => e.stopPropagation()}
         />
       ) : (
         <span className="flex-1 truncate">{chat.title}</span>
@@ -281,29 +310,41 @@ function ChatItem({ chat, isActive, isCollapsed, onSelect, onDelete, onRename }:
             variant="ghost"
             size="icon"
             className={cn(
-              "h-6 w-6 opacity-0 group-hover:opacity-100 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent",
+              "h-6 w-6 opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 active:opacity-100 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-opacity cursor-pointer"
             )}
             onClick={(e) => e.stopPropagation()}
           >
             <MoreHorizontal className="h-3 w-3" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => setIsEditing(true)}>
+        <DropdownMenuContent align="end" className="z-50">
+          <DropdownMenuItem
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsEditing(true);
+            }}
+            className="cursor-pointer"
+          >
             <Edit3 className="mr-2 h-4 w-4" />
             Rename
           </DropdownMenuItem>
-          <DropdownMenuItem>
+          <DropdownMenuItem className="cursor-pointer">
             <Download className="mr-2 h-4 w-4" />
             Export
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={onDelete} className="text-destructive">
+          <DropdownMenuItem
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="text-destructive cursor-pointer"
+          >
             <Trash2 className="mr-2 h-4 w-4" />
             Delete
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
-  )
+  );
 }

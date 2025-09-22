@@ -1,4 +1,4 @@
-import { runModelStream } from "../services/ollama.services.js";
+import { runModelStream } from "../services/ollama.service.js";
 
 export function streamGenerate(req, res) {
   try {
@@ -64,3 +64,4 @@ export function streamGenerate(req, res) {
     res.status(500).json({ error: "Unexpected server error." });
   }
 }
+

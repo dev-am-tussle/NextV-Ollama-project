@@ -1,8 +1,10 @@
+/* NOTE: This file duplicates tokens from app/globals.css. Prefer consolidating into a single source. */
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark *));
 
+/* Legacy token set (consider removing if using app/globals.css) */
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);

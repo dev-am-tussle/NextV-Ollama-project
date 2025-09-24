@@ -10,7 +10,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useApp } from "@/providers/AppProvider";
+import { useAuth } from "@/providers/AuthProvider";
+import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff } from "lucide-react";
 
@@ -19,7 +20,8 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useApp();
+  const { login } = useAuth();
+  const navigate = useNavigate();
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -36,7 +38,8 @@ const Login = () => {
 
     setIsLoading(true);
     try {
-      await login(email, password);
+      await login({ email, password });
+      navigate("/");
       toast({
         title: "Welcome back!",
         description: "You have been successfully logged in.",

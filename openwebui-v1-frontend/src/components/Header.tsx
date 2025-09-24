@@ -1,11 +1,13 @@
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { useApp } from "@/providers/AppProvider";
+import { useAuth } from "@/providers/AuthProvider";
+import { useToast } from "@/hooks/use-toast";
 
 export const Header = () => {
   const location = useLocation();
-  const { isAuthenticated, user, signout } = useApp();
+  const { isAuthenticated, user, logout } = useAuth();
+  const { toast } = useToast();
 
   // Don't show header on main chat interface
   if (location.pathname === "/" && isAuthenticated) {
@@ -60,7 +62,24 @@ export const Header = () => {
                 </Button>
               </>
             ) : (
-              <Button variant="ghost" size="sm" onClick={signout}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    await logout();
+                    toast({
+                      title: "Signed out",
+                      description: "You have been signed out.",
+                    });
+                  } catch (err) {
+                    toast({
+                      title: "Sign out",
+                      description: "There was a problem signing out.",
+                    });
+                  }
+                }}
+              >
                 Sign out
               </Button>
             )}

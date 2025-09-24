@@ -1,11 +1,3 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { useApp } from "@/providers/AppProvider";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   Send,
   Square,
@@ -15,7 +7,20 @@ import {
   Check,
   GitCompare,
   LogOut,
+  Share2,
+  HelpCircle,
+  Star,
+  Sliders,
 } from "lucide-react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent } from "@/components/ui/card";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { useAuth } from "@/providers/AuthProvider";
+import { ThemeToggle } from "@/components/ThemeToggle";
+// ...existing code... (removed duplicate lucide-react import)
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -23,6 +28,12 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+import {
+  listConversations,
+  createConversation,
+  getMessages as fetchMessages,
+  postMessage,
+} from "@/services/conversation";
 import {
   ModelSelector,
   modelIcon,
@@ -94,7 +105,7 @@ const MODEL_INFO: Record<ModelKey, { intro: string; suggestions: string[] }> = {
 };
 
 const Chat = () => {
-  const { isAuthenticated, user, signout } = useApp();
+  const { isAuthenticated, user, logout: signout, loading } = useAuth();
   const { toast } = useToast();
   const [message, setMessage] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -114,11 +125,68 @@ const Chat = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Redirect if not authenticated
-  if (!isAuthenticated) {
-    window.location.href = "/home";
-    return null;
-  }
+  // After AuthProvider hydration completes, redirect to /home if unauthenticated.
+  // Use an effect for navigation so hooks order remains stable across renders.
+  useEffect(() => {
+    if (!loading && !isAuthenticated) {
+      // navigate away if user is not authenticated
+      window.location.href = "/home";
+    }
+  }, [loading, isAuthenticated]);
+
+  // Load conversations on mount
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const convs: any = await listConversations(50);
+        if (!mounted) return;
+        const mapped = (convs || []).map((c: any) => ({
+          id: c._id,
+          title: c.title,
+          messages: [],
+          updatedAt: c.updated_at ? new Date(c.updated_at) : new Date(),
+        }));
+        setThreads(mapped);
+        if (mapped.length > 0 && !activeThreadId) {
+          setActiveThreadId(mapped[0].id);
+        }
+      } catch (err) {
+        // ignore
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // When activeThread changes, fetch its messages
+  useEffect(() => {
+    if (!activeThreadId) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const msgs: any = await fetchMessages(activeThreadId, 200);
+        if (!mounted) return;
+        const mapped = (msgs || []).map((m: any) => ({
+          id: m._id || String(m._id || Date.now()),
+          role: m.sender === "user" ? "user" : "assistant",
+          content: m.text || m.content || "",
+          timestamp: m.created_at ? new Date(m.created_at) : new Date(),
+        }));
+        setThreads((prev) =>
+          prev.map((t) =>
+            t.id === activeThreadId ? { ...t, messages: mapped } : t
+          )
+        );
+      } catch (err) {
+        // ignore
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [activeThreadId]);
 
   const activeThread = threads.find((t) => t.id === activeThreadId);
   const messages = activeThread?.messages || [];
@@ -131,96 +199,150 @@ const Chat = () => {
     scrollToBottom();
   }, [messages]);
 
-  const createNewThread = () => {
-    const newThread: ChatThread = {
-      id: Date.now().toString(),
-      title: "New Chat",
-      messages: [],
-      updatedAt: new Date(),
-      model: selectedModel,
-    };
-    setThreads((prev) => [newThread, ...prev]);
-    setActiveThreadId(newThread.id);
-  };
-
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!message.trim() || isStreaming) return;
-
-    let currentThreadId = activeThreadId;
-
-    // Create new thread if none exists
-    if (!currentThreadId) {
-      const newThread: ChatThread = {
-        id: Date.now().toString(),
-        title: message.slice(0, 50) + (message.length > 50 ? "..." : ""),
+  const createNewThread = async (title?: string) => {
+    // create on server
+    try {
+      const conv = await createConversation(title || "New Chat");
+      const t: ChatThread = {
+        id: conv._id,
+        title: conv.title || "New Chat",
         messages: [],
-        updatedAt: new Date(),
+        updatedAt: conv.updated_at ? new Date(conv.updated_at) : new Date(),
         model: selectedModel,
       };
-      setThreads((prev) => [newThread, ...prev]);
-      currentThreadId = newThread.id;
-      setActiveThreadId(currentThreadId);
+      setThreads((prev) => [t, ...prev]);
+      setActiveThreadId(t.id);
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err?.message || "Failed to create chat",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSend = async (e?: React.FormEvent) => {
+    if (e && typeof (e as any).preventDefault === "function")
+      (e as any).preventDefault();
+    if (!message.trim() || isStreaming) return;
+    let currentThreadId = activeThreadId;
+
+    // If no current thread, create one first
+    if (!currentThreadId) {
+      try {
+        const conv = await createConversation(message.slice(0, 50));
+        currentThreadId = conv._id;
+        setActiveThreadId(currentThreadId);
+        setThreads((prev) => [
+          {
+            id: conv._id,
+            title: conv.title || message.slice(0, 50),
+            messages: [],
+            updatedAt: new Date(),
+            model: selectedModel,
+          },
+          ...prev,
+        ]);
+      } catch (err: any) {
+        toast({ title: "Error", description: "Unable to create conversation" });
+        return;
+      }
     }
 
+    // Optimistic UI: add user message
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: String(Date.now()),
       role: "user",
       content: message,
       timestamp: new Date(),
     };
-
-    // Add user message
     setThreads((prev) =>
-      prev.map((thread) =>
-        thread.id === currentThreadId
-          ? {
-              ...thread,
-              messages: [...thread.messages, userMessage],
-              updatedAt: new Date(),
-              title:
-                thread.messages.length === 0
-                  ? message.slice(0, 50) + (message.length > 50 ? "..." : "")
-                  : thread.title,
-            }
-          : thread
+      prev.map((t) =>
+        t.id === currentThreadId
+          ? { ...t, messages: [...t.messages, userMessage] }
+          : t
       )
     );
-
     setMessage("");
     setIsStreaming(true);
 
-    // Simulate AI response
-    setTimeout(() => {
+    try {
+      const resp: any = await postMessage(
+        currentThreadId,
+        message,
+        selectedModel
+      );
+      // resp.assistant contains { id, text }
+      const assistantText = resp?.assistant?.text || "";
       const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: resp?.assistant?.id || String(Date.now() + 1),
         role: "assistant",
-        content: `Model (${selectedModel}) understands you're asking about: "${message}"\n\nThis is a mock response. In a real implementation, this would call your backend with the selected model${
-          compareMode ? " (compare mode active)" : ""
-        }.`,
+        content: assistantText,
         timestamp: new Date(),
       };
-
       setThreads((prev) =>
-        prev.map((thread) =>
-          thread.id === currentThreadId
+        prev.map((t) =>
+          t.id === currentThreadId
             ? {
-                ...thread,
-                messages: [...thread.messages, assistantMessage],
+                ...t,
+                messages: [...t.messages, assistantMessage],
                 updatedAt: new Date(),
               }
-            : thread
+            : t
         )
       );
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err?.message || "Failed to send message",
+        variant: "destructive",
+      });
+    } finally {
       setIsStreaming(false);
-    }, 1500);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-      handleSend(e);
     }
   };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Enter to send, Shift+Enter for newline
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const shareCurrentChat = async () => {
+    if (!activeThreadId) {
+      toast({
+        title: "No active chat",
+        description: "Please open a chat to share.",
+      });
+      return;
+    }
+    const thread = threads.find((t) => t.id === activeThreadId);
+    const url = `${window.location.origin}${window.location.pathname}?thread=${activeThreadId}`;
+    try {
+      if (navigator.share) {
+        await (navigator as any).share({
+          title: thread?.title || "Chat",
+          text: "Sharing chat",
+          url,
+        });
+      } else {
+        await navigator.clipboard.writeText(url);
+        toast({
+          title: "Link copied",
+          description: "Share link copied to clipboard.",
+        });
+      }
+    } catch (err) {
+      toast({ title: "Unable to share", description: "Copy failed." });
+    }
+  };
+
+  const openHelp = () => window.open("/help", "_blank");
+  const openPersonalize = () => setIsPromptsOpen(true);
+  const openUpgrade = () => window.open("/upgrade", "_blank");
+  const openSettings = () => setIsSettingsOpen(true);
 
   const copyToClipboard = async (content: string, messageId: string) => {
     try {
@@ -336,7 +458,17 @@ const Chat = () => {
           onOpenPrompts={() => setIsPromptsOpen(true)}
           onOpenSettings={() => setIsSettingsOpen(true)}
           user={user}
-          onSignOut={signout}
+          onSignOut={async () => {
+            try {
+              await signout();
+              toast({
+                title: "Signed out",
+                description: "You have been signed out.",
+              });
+            } catch (_) {
+              toast({ title: "Sign out", description: "Sign out completed." });
+            }
+          }}
         />
 
         {/* Main Content */}
@@ -360,6 +492,14 @@ const Chat = () => {
 
             <div className="flex items-center space-x-2">
               <ThemeToggle />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={shareCurrentChat}
+                title="Share chat"
+              >
+                <Share2 className="h-4 w-4" />
+              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -380,11 +520,38 @@ const Chat = () => {
                   align="end"
                   className="bg-popover border border-border"
                 >
-                  <DropdownMenuItem disabled>
-                    <User className="mr-2 h-4 w-4" />
-                    <span>{user?.email}</span>
+                  <DropdownMenuItem onClick={openHelp}>
+                    <HelpCircle className="mr-2 h-4 w-4" />
+                    <span>Help</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={signout}>
+                  <DropdownMenuItem onClick={openPersonalize}>
+                    <Star className="mr-2 h-4 w-4" />
+                    <span>Personalize</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={openUpgrade}>
+                    <Share2 className="mr-2 h-4 w-4" />
+                    <span>Upgrade</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={openSettings}>
+                    <Sliders className="mr-2 h-4 w-4" />
+                    <span>Settings</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={async () => {
+                      try {
+                        await signout();
+                        toast({
+                          title: "Signed out",
+                          description: "You have been signed out.",
+                        });
+                      } catch (err) {
+                        toast({
+                          title: "Sign out",
+                          description: "There was a problem signing out.",
+                        });
+                      }
+                    }}
+                  >
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Sign out</span>
                   </DropdownMenuItem>
@@ -547,7 +714,7 @@ const Chat = () => {
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="Ask anything about coding... (Ctrl/Cmd + Enter to send)"
+                    placeholder="Ask anything about coding... (Enter to send, Shift+Enter for newline)"
                     className="min-h-[60px] max-h-[200px] resize-none pr-12"
                     disabled={isStreaming}
                   />
@@ -557,6 +724,8 @@ const Chat = () => {
                     size="sm"
                     className="absolute right-2 bottom-2 h-8 w-8 p-0"
                     disabled={isStreaming}
+                    onClick={() => setIsFileManagerOpen(true)}
+                    title="Attachments / File Manager"
                   >
                     <Paperclip className="h-4 w-4" />
                   </Button>
@@ -588,9 +757,13 @@ const Chat = () => {
               <p className="text-xs text-muted-foreground mt-2 text-center">
                 Press{" "}
                 <kbd className="px-1 py-0.5 bg-muted rounded text-xs">
-                  Ctrl/Cmd + Enter
+                  Enter
                 </kbd>{" "}
-                to send your message
+                to send,{" "}
+                <kbd className="px-1 py-0.5 bg-muted rounded text-xs">
+                  Shift+Enter
+                </kbd>{" "}
+                for a new line
               </p>
             </form>
           </div>

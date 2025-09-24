@@ -121,14 +121,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({
     setIsAuthenticated(false);
     navigate("/home");
   };
-
-  // Handle route redirects
-  useEffect(() => {
-    if (!isAuthenticated && location.pathname === "/") {
-      navigate("/home");
-    }
-  }, [isAuthenticated, location.pathname, navigate]);
-
   // Persist UI settings
   useEffect(() => {
     localStorage.setItem("compactMode", compactMode.toString());

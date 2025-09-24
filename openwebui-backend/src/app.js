@@ -18,8 +18,13 @@ app.use(helmet());
 app.use(morgan("dev"));
 
 // CORS
-const FRONTEND = process.env.FRONTEND_ORIGIN || "*";
-app.use(cors({ origin: FRONTEND }));
+const FRONTEND = process.env.FRONTEND_ORIGIN || "http://localhost:8080";
+app.use(
+  cors({
+    origin: FRONTEND,
+    credentials: true,
+  })
+);
 
 // body parser
 app.use(express.json({ limit: "1mb" }));

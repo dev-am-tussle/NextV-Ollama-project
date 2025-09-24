@@ -1,10 +1,10 @@
 import { Link, useLocation } from "react-router-dom";
 import { Github, Twitter, Linkedin } from "lucide-react";
-import { useApp } from "@/providers/AppProvider";
+import { useAuth } from "@/providers/AuthProvider";
 
 export const Footer = () => {
   const location = useLocation();
-  const { isAuthenticated } = useApp();
+  const { isAuthenticated } = useAuth();
 
   // Don't show footer on main chat interface
   if (location.pathname === "/" && isAuthenticated) {
@@ -118,7 +118,7 @@ export const Footer = () => {
 
         <div className="mt-8 flex flex-col items-center justify-between border-t pt-8 md:flex-row">
           <p className="text-sm text-muted-foreground">
-            © 2024 Pointer. All rights reserved.
+            © 2025 Pointer. All rights reserved.
           </p>
 
           <div className="flex items-center space-x-4 mt-4 md:mt-0">

@@ -62,9 +62,17 @@ async function apiFetch(endpoint: string, opts: RequestInit = {}) {
     } catch (e) {
       // non-json body
     }
-    throw new Error(
-      (body && body.message) || res.statusText || "Request failed"
-    );
+    // Prefer common keys 'error' or 'message' returned by backend
+    const errMsg =
+      (body && (body.error || body.message)) ||
+      res.statusText ||
+      "Request failed";
+    const err = new Error(errMsg);
+    // attach parsed body for callers who want programmatic access
+    try {
+      (err as any).body = body;
+    } catch (_) {}
+    throw err;
   }
 
   // Try parse JSON first; if parse fails return text

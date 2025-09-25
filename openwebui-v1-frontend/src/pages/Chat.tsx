@@ -1,32 +1,7 @@
-import {
-  Send,
-  Square,
-  Paperclip,
-  User,
-  Copy,
-  Check,
-  GitCompare,
-  LogOut,
-  Share2,
-  HelpCircle,
-  Star,
-  Sliders,
-} from "lucide-react";
-import React, { useState, useRef, useEffect, useMemo } from "react";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import React, { useState, useEffect, useMemo } from "react";
+import { GitCompare } from "lucide-react";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { useAuth } from "@/providers/AuthProvider";
-import { ThemeToggle } from "@/components/ThemeToggle";
-// ...existing code... (removed duplicate lucide-react import)
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import {
   listConversations,
@@ -34,15 +9,15 @@ import {
   getMessages as fetchMessages,
   postMessage,
 } from "@/services/conversation";
-import {
-  ModelSelector,
-  modelIcon,
-  ModelKey,
-} from "@/components/chat/model-selector";
+import { streamGenerate } from "@/services/ollama";
+import { ModelKey, modelIcon } from "@/components/chat/model-selector";
 import { ChatSidebar } from "@/components/chat/sidebar";
 import { FileManagerDialog } from "@/components/chat/file-manager-dialog";
 import { PromptsDialog, PromptItem } from "@/components/chat/prompts-dialog";
 import { SettingsDialog } from "@/components/chat/settings-dialog";
+import { ChatHeader } from "@/components/chat/ChatHeader";
+import { MessagesPane } from "@/components/chat/MessagesPane";
+import { Composer } from "@/components/chat/Composer";
 
 interface Message {
   id: string;
@@ -56,10 +31,8 @@ interface ChatThread {
   title: string;
   messages: Message[];
   updatedAt: Date;
-  model?: string; // model used for this thread
+  model?: string;
 }
-
-// ModelKey imported from component
 
 const MODEL_INFO: Record<ModelKey, { intro: string; suggestions: string[] }> = {
   Mistral: {
@@ -68,50 +41,30 @@ const MODEL_INFO: Record<ModelKey, { intro: string; suggestions: string[] }> = {
     suggestions: [
       "Refactor this React component for performance",
       "Summarize this block of code",
-      "Generate unit tests for a TypeScript function",
-      "Explain JavaScript event loop",
     ],
   },
   Gemma: {
-    intro:
-      "Gemma excels at reasoning & structured generation. Use it for explanations & multi-step logic.",
-    suggestions: [
-      "Explain this algorithm step by step",
-      "Design a database schema for an e-commerce app",
-      "Compare REST vs GraphQL",
-      "Generate a migration plan",
-    ],
+    intro: "Gemma excels at reasoning & structured generation.",
+    suggestions: ["Explain this algorithm step by step"],
   },
   Phi: {
-    intro:
-      "Phi is lightweight and great for quick iterative coding tasks & rapid prototyping.",
-    suggestions: [
-      "Create a simple Express route",
-      "Optimize this loop in Python",
-      "Give me a regex for email validation",
-      "Convert this callback code to async/await",
-    ],
+    intro: "Phi is lightweight and great for quick iterative coding tasks.",
+    suggestions: ["Create a simple Express route"],
   },
   Ollama: {
-    intro:
-      "Ollama (local) lets you run models on-device. Ideal for privacy-sensitive or offline workflows.",
-    suggestions: [
-      "How to run a local LLM securely",
-      "Generate a bash script to automate backups",
-      "Draft a README introduction",
-      "Suggest improvements to this prompt",
-    ],
+    intro: "Ollama (local) lets you run models on-device.",
+    suggestions: ["How to run a local LLM securely"],
   },
 };
 
-const Chat = () => {
+const Chat: React.FC = () => {
   const { isAuthenticated, user, logout: signout, loading } = useAuth();
   const { toast } = useToast();
+
   const [message, setMessage] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
-  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<ModelKey>("Mistral");
   const [compareMode, setCompareMode] = useState(false);
   const [suggestionSearch, setSuggestionSearch] = useState("");
@@ -122,20 +75,19 @@ const Chat = () => {
   const [fileSearch, setFileSearch] = useState("");
   const [promptSearch, setPromptSearch] = useState("");
   const [compactMode, setCompactMode] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // After AuthProvider hydration completes, redirect to /home if unauthenticated.
-  // Use an effect for navigation so hooks order remains stable across renders.
+  // Redirect to home if not auth'd (after auth init)
   useEffect(() => {
     if (!loading && !isAuthenticated) {
-      // navigate away if user is not authenticated
       window.location.href = "/home";
     }
   }, [loading, isAuthenticated]);
 
-  // Load conversations on mount
+  // Load conversations only after auth is initialized and user is authenticated
   useEffect(() => {
+    if (loading) return; // wait until auth init completes
+    if (!isAuthenticated) return;
+
     let mounted = true;
     (async () => {
       try {
@@ -143,14 +95,14 @@ const Chat = () => {
         if (!mounted) return;
         const mapped = (convs || []).map((c: any) => ({
           id: c._id,
-          title: c.title,
+          // Coerce title to string to avoid objects being rendered
+          title: String(c.title || "New Chat"),
           messages: [],
           updatedAt: c.updated_at ? new Date(c.updated_at) : new Date(),
         }));
         setThreads(mapped);
-        if (mapped.length > 0 && !activeThreadId) {
+        if (mapped.length > 0 && !activeThreadId)
           setActiveThreadId(mapped[0].id);
-        }
       } catch (err) {
         // ignore
       }
@@ -158,11 +110,35 @@ const Chat = () => {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [loading, isAuthenticated]);
 
-  // When activeThread changes, fetch its messages
+  const activeThread = threads.find((t) => t.id === activeThreadId);
+  const messages = activeThread?.messages || [];
+
+  // Create a new local-only thread. Backend conversation will be created when the
+  // user sends the first message in that thread.
+  const createNewThread = (title?: string) => {
+    const id = `local-${Date.now()}`;
+    const t: ChatThread = {
+      id,
+      // ensure title is always a string
+      title: String(title || "New Chat"),
+      messages: [],
+      updatedAt: new Date(),
+      model: selectedModel,
+    };
+    setThreads((prev) => [t, ...prev]);
+    setActiveThreadId(t.id);
+  };
+
+  // Fetch messages for a conversation when a persisted (non-local) thread is active
   useEffect(() => {
     if (!activeThreadId) return;
+
+    // If this is a local-only thread (created in frontend but not persisted yet),
+    // skip fetching messages from backend until it is persisted.
+    if (String(activeThreadId).startsWith("local-")) return;
+
     let mounted = true;
     (async () => {
       try {
@@ -188,72 +164,58 @@ const Chat = () => {
     };
   }, [activeThreadId]);
 
-  const activeThread = threads.find((t) => t.id === activeThreadId);
-  const messages = activeThread?.messages || [];
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const shareCurrentChat = async () => {
+    // share/quick-send current composer text
+    await handleSend();
   };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  const createNewThread = async (title?: string) => {
-    // create on server
-    try {
-      const conv = await createConversation(title || "New Chat");
-      const t: ChatThread = {
-        id: conv._id,
-        title: conv.title || "New Chat",
-        messages: [],
-        updatedAt: conv.updated_at ? new Date(conv.updated_at) : new Date(),
-        model: selectedModel,
-      };
-      setThreads((prev) => [t, ...prev]);
-      setActiveThreadId(t.id);
-    } catch (err: any) {
-      toast({
-        title: "Error",
-        description: err?.message || "Failed to create chat",
-        variant: "destructive",
-      });
-    }
+  const openSettings = () => {
+    setIsSettingsOpen(true);
   };
 
-  const handleSend = async (e?: React.FormEvent) => {
-    if (e && typeof (e as any).preventDefault === "function")
-      (e as any).preventDefault();
-    if (!message.trim() || isStreaming) return;
+  const handleSend = async (text?: string) => {
+    const sendText = text ?? message;
+    if (!sendText.trim() || isStreaming) return;
+
     let currentThreadId = activeThreadId;
-
-    // If no current thread, create one first
-    if (!currentThreadId) {
+    // If there is no active thread, or the active thread is a local-only thread
+    // (created with id prefix "local-"), create/persist a backend conversation
+    // and replace the local thread with the persisted one (preserve messages).
+    if (!currentThreadId || String(currentThreadId).startsWith("local-")) {
       try {
-        const conv = await createConversation(message.slice(0, 50));
-        currentThreadId = conv._id;
-        setActiveThreadId(currentThreadId);
+        const conv = await createConversation(sendText.slice(0, 50));
+        const backendId = conv._id;
+
+        // Preserve existing messages from local thread (if any)
+        const localMessages =
+          threads.find((t) => t.id === currentThreadId)?.messages || [];
+
+        // Replace local thread with backend-persisted thread (put it at top)
+        const newThread: ChatThread = {
+          id: backendId,
+          // coerce backend title to string to be safe
+          title: String(conv.title || sendText.slice(0, 50)),
+          messages: localMessages,
+          updatedAt: new Date(),
+          model: selectedModel,
+        };
+
         setThreads((prev) => [
-          {
-            id: conv._id,
-            title: conv.title || message.slice(0, 50),
-            messages: [],
-            updatedAt: new Date(),
-            model: selectedModel,
-          },
-          ...prev,
+          newThread,
+          ...prev.filter((t) => t.id !== currentThreadId),
         ]);
+        currentThreadId = backendId;
+        setActiveThreadId(currentThreadId);
       } catch (err: any) {
         toast({ title: "Error", description: "Unable to create conversation" });
         return;
       }
     }
 
-    // Optimistic UI: add user message
     const userMessage: Message = {
       id: String(Date.now()),
       role: "user",
-      content: message,
+      content: sendText,
       timestamp: new Date(),
     };
     setThreads((prev) =>
@@ -267,30 +229,104 @@ const Chat = () => {
     setIsStreaming(true);
 
     try {
-      const resp: any = await postMessage(
-        currentThreadId,
-        message,
-        selectedModel
-      );
-      // resp.assistant contains { id, text }
-      const assistantText = resp?.assistant?.text || "";
-      const assistantMessage: Message = {
-        id: resp?.assistant?.id || String(Date.now() + 1),
-        role: "assistant",
-        content: assistantText,
-        timestamp: new Date(),
+      // Map our UI model keys to backend model identifiers where applicable
+      const modelMap: Record<string, string | undefined> = {
+        Mistral: "mistral:latest",
+        Gemma: "gemma:2b",
+        Phi: "phi:2.7b",
+        Ollama: "gemma:2b", // use local gemma for client-side streaming path
       };
-      setThreads((prev) =>
-        prev.map((t) =>
-          t.id === currentThreadId
-            ? {
-                ...t,
-                messages: [...t.messages, assistantMessage],
-                updatedAt: new Date(),
-              }
-            : t
-        )
-      );
+      const backendModelId = modelMap[selectedModel] || undefined;
+
+      // If using local Ollama model (or modelId indicates streaming), use SSE streaming endpoint
+      if (selectedModel === "Ollama") {
+        // Append an assistant placeholder message
+        const assistantId = `assistant-${Date.now()}`;
+        const assistantMessage: Message = {
+          id: assistantId,
+          role: "assistant",
+          content: "",
+          timestamp: new Date(),
+        };
+        setThreads((prev) =>
+          prev.map((t) =>
+            t.id === currentThreadId
+              ? { ...t, messages: [...t.messages, assistantMessage] }
+              : t
+          )
+        );
+
+        let collected = "";
+        await streamGenerate(
+          { prompt: sendText, modelId: "gemma:2b" },
+          {
+            onChunk: (chunk) => {
+              collected += chunk;
+              // append chunk locally to assistant message
+              setThreads((prev) =>
+                prev.map((t) =>
+                  t.id === currentThreadId
+                    ? {
+                        ...t,
+                        messages: t.messages.map((m) =>
+                          m.id === assistantId
+                            ? { ...m, content: m.content + chunk }
+                            : m
+                        ),
+                      }
+                    : t
+                )
+              );
+            },
+            onError: (err) => {
+              toast({
+                title: "Stream error",
+                description: String(err?.message || err),
+              });
+            },
+          }
+        );
+
+        // persist the assistant message via conversation post (server will create model message)
+        try {
+          await postMessage(currentThreadId, collected, backendModelId);
+        } catch (err: any) {
+          // show an error toast but keep local content
+          toast({
+            title: "Persist error",
+            description: err?.message || "Failed to persist assistant message",
+          });
+          // log server error body (apiFetch attaches it to Error.body)
+          console.error(
+            "postMessage persist error:",
+            (err && (err as any).body) || err
+          );
+        }
+      } else {
+        const resp: any = await postMessage(
+          currentThreadId,
+          sendText,
+          backendModelId
+        );
+        const assistantText = resp?.assistant?.text || "";
+        const assistantMessage: Message = {
+          id: resp?.assistant?.id || String(Date.now() + 1),
+          role: "assistant",
+          content: assistantText,
+          timestamp: new Date(),
+        };
+        setThreads((prev) =>
+          prev.map((t) =>
+            t.id === currentThreadId
+              ? {
+                  ...t,
+                  messages: [...t.messages, assistantMessage],
+                  updatedAt: new Date(),
+                }
+              : t
+          )
+        );
+      }
     } catch (err: any) {
       toast({
         title: "Error",
@@ -300,102 +336,6 @@ const Chat = () => {
     } finally {
       setIsStreaming(false);
     }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Enter to send, Shift+Enter for newline
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
-
-  const shareCurrentChat = async () => {
-    if (!activeThreadId) {
-      toast({
-        title: "No active chat",
-        description: "Please open a chat to share.",
-      });
-      return;
-    }
-    const thread = threads.find((t) => t.id === activeThreadId);
-    const url = `${window.location.origin}${window.location.pathname}?thread=${activeThreadId}`;
-    try {
-      if (navigator.share) {
-        await (navigator as any).share({
-          title: thread?.title || "Chat",
-          text: "Sharing chat",
-          url,
-        });
-      } else {
-        await navigator.clipboard.writeText(url);
-        toast({
-          title: "Link copied",
-          description: "Share link copied to clipboard.",
-        });
-      }
-    } catch (err) {
-      toast({ title: "Unable to share", description: "Copy failed." });
-    }
-  };
-
-  const openHelp = () => window.open("/help", "_blank");
-  const openPersonalize = () => setIsPromptsOpen(true);
-  const openUpgrade = () => window.open("/upgrade", "_blank");
-  const openSettings = () => setIsSettingsOpen(true);
-
-  const copyToClipboard = async (content: string, messageId: string) => {
-    try {
-      await navigator.clipboard.writeText(content);
-      setCopiedMessageId(messageId);
-      toast({
-        title: "Copied!",
-        description: "Message copied to clipboard.",
-      });
-      setTimeout(() => setCopiedMessageId(null), 2000);
-    } catch (err) {
-      toast({
-        title: "Error",
-        description: "Failed to copy message.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Initialize with a new thread
-  useEffect(() => {
-    if (threads.length === 0) {
-      createNewThread();
-    }
-  }, [threads.length]);
-
-  // Thread operations
-  const renameThread = (id: string) => {
-    const title = prompt("Enter new title");
-    if (title) {
-      setThreads((prev) =>
-        prev.map((t) =>
-          t.id === id ? { ...t, title, updatedAt: new Date() } : t
-        )
-      );
-    }
-  };
-
-  const deleteThread = (id: string) => {
-    setThreads((prev) => prev.filter((t) => t.id !== id));
-    if (activeThreadId === id) setActiveThreadId(null);
-  };
-
-  const duplicateThread = (id: string) => {
-    const original = threads.find((t) => t.id === id);
-    if (!original) return;
-    const clone: ChatThread = {
-      ...original,
-      id: Date.now().toString(),
-      title: original.title + " (Copy)",
-      updatedAt: new Date(),
-    };
-    setThreads((prev) => [clone, ...prev]);
   };
 
   const filteredSuggestions = MODEL_INFO[selectedModel].suggestions.filter(
@@ -429,12 +369,11 @@ const Chat = () => {
       p.title.toLowerCase().includes(promptSearch.toLowerCase()) ||
       p.content.toLowerCase().includes(promptSearch.toLowerCase())
   );
-
   const filteredThreads = threads.filter((t) =>
-    t.title.toLowerCase().includes(chatSearch.toLowerCase())
+    String(t?.title || "")
+      .toLowerCase()
+      .includes(chatSearch.toLowerCase())
   );
-
-  // modelIcon imported
 
   return (
     <SidebarProvider>
@@ -442,16 +381,38 @@ const Chat = () => {
         <ChatSidebar
           threads={filteredThreads.map((t) => ({
             id: t.id,
-            title: t.title,
+            // ensure title is a string
+            title: String(t.title || "New Chat"),
             updatedAt: t.updatedAt,
             messagesCount: t.messages.length,
           }))}
           activeId={activeThreadId}
           onSelect={setActiveThreadId}
           onNew={createNewThread}
-          onRename={renameThread}
-          onDuplicate={duplicateThread}
-          onDelete={deleteThread}
+          onRename={(id) => {
+            const title = prompt("Enter new title");
+            if (title)
+              setThreads((prev) =>
+                prev.map((t) =>
+                  t.id === id ? { ...t, title, updatedAt: new Date() } : t
+                )
+              );
+          }}
+          onDuplicate={(id) => {
+            const original = threads.find((t) => t.id === id);
+            if (!original) return;
+            const clone: ChatThread = {
+              ...original,
+              id: Date.now().toString(),
+              title: original.title + " (Copy)",
+              updatedAt: new Date(),
+            };
+            setThreads((prev) => [clone, ...prev]);
+          }}
+          onDelete={(id) => {
+            setThreads((prev) => prev.filter((t) => t.id !== id));
+            if (activeThreadId === id) setActiveThreadId(null);
+          }}
           chatSearch={chatSearch}
           onChatSearch={setChatSearch}
           onOpenFiles={() => setIsFileManagerOpen(true)}
@@ -471,96 +432,18 @@ const Chat = () => {
           }}
         />
 
-        {/* Main Content */}
         <div className="flex-1 flex flex-col">
-          {/* Header */}
-          <header className="border-b p-4 flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <SidebarTrigger />
-              <div className="flex items-center gap-3">
-                <ModelSelector
-                  selected={selectedModel}
-                  onSelect={setSelectedModel}
-                  compareMode={compareMode}
-                  onToggleCompare={() => setCompareMode((c) => !c)}
-                />
-                <h1 className="font-semibold hidden md:block">
-                  {activeThread?.title || "New Chat"}
-                </h1>
-              </div>
-            </div>
+          <ChatHeader
+            // ensure title is a string to prevent React rendering objects
+            title={String(activeThread?.title || "New Chat")}
+            selectedModel={selectedModel}
+            onSelectModel={setSelectedModel}
+            compareMode={compareMode}
+            onToggleCompare={() => setCompareMode((c) => !c)}
+            onShare={shareCurrentChat}
+            onOpenSettings={openSettings}
+          />
 
-            <div className="flex items-center space-x-2">
-              <ThemeToggle />
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={shareCurrentChat}
-                title="Share chat"
-              >
-                <Share2 className="h-4 w-4" />
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="relative h-8 w-8 rounded-full"
-                  >
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback>
-                        {user?.name?.[0]?.toUpperCase() ||
-                          user?.email?.[0]?.toUpperCase() ||
-                          "U"}
-                      </AvatarFallback>
-                    </Avatar>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  className="bg-popover border border-border"
-                >
-                  <DropdownMenuItem onClick={openHelp}>
-                    <HelpCircle className="mr-2 h-4 w-4" />
-                    <span>Help</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={openPersonalize}>
-                    <Star className="mr-2 h-4 w-4" />
-                    <span>Personalize</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={openUpgrade}>
-                    <Share2 className="mr-2 h-4 w-4" />
-                    <span>Upgrade</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={openSettings}>
-                    <Sliders className="mr-2 h-4 w-4" />
-                    <span>Settings</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={async () => {
-                      try {
-                        await signout();
-                        toast({
-                          title: "Signed out",
-                          description: "You have been signed out.",
-                        });
-                      } catch (err) {
-                        toast({
-                          title: "Sign out",
-                          description: "There was a problem signing out.",
-                        });
-                      }
-                    }}
-                  >
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>Sign out</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </header>
-
-          {/* Messages */}
           <div className="flex-1 overflow-auto p-6">
             {compareMode && (
               <div className="mb-4 p-3 text-xs rounded-md border bg-muted/30 flex items-center gap-2">
@@ -568,6 +451,7 @@ const Chat = () => {
                 Responses would be shown side-by-side (UI placeholder).
               </div>
             )}
+
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center space-y-6 max-w-2xl mx-auto">
                 <div className="flex flex-col items-center space-y-3">
@@ -581,6 +465,7 @@ const Chat = () => {
                     {MODEL_INFO[selectedModel].intro}
                   </p>
                 </div>
+
                 <div className="w-full space-y-3">
                   <input
                     type="text"
@@ -591,15 +476,13 @@ const Chat = () => {
                   />
                   <div className="flex flex-wrap gap-2 justify-center">
                     {filteredSuggestions.map((prompt) => (
-                      <Button
+                      <button
                         key={prompt}
-                        variant="outline"
-                        size="sm"
+                        className="btn btn-outline btn-sm text-xs"
                         onClick={() => setMessage(prompt)}
-                        className="text-xs"
                       >
                         {prompt}
-                      </Button>
+                      </button>
                     ))}
                     {filteredSuggestions.length === 0 && (
                       <p className="text-xs text-muted-foreground">
@@ -610,165 +493,25 @@ const Chat = () => {
                 </div>
               </div>
             ) : (
-              <div className="space-y-6 max-w-4xl mx-auto">
-                {messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`flex gap-4 ${
-                      msg.role === "user" ? "justify-end" : ""
-                    }`}
-                  >
-                    {msg.role === "assistant" && (
-                      <Avatar className="h-8 w-8 flex-shrink-0">
-                        <AvatarFallback className="bg-primary text-primary-foreground">
-                          AI
-                        </AvatarFallback>
-                      </Avatar>
-                    )}
-
-                    <Card
-                      className={`max-w-[80%] ${
-                        msg.role === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : ""
-                      } ${compactMode ? "p-1" : ""}`}
-                    >
-                      <CardContent className={compactMode ? "p-3" : "p-4"}>
-                        <div className="space-y-2">
-                          <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-                            {msg.content}
-                          </pre>
-                          {msg.role === "assistant" && (
-                            <div className="flex items-center justify-between pt-2 border-t border-border/50">
-                              <span className="text-xs text-muted-foreground">
-                                {msg.timestamp.toLocaleTimeString()}
-                              </span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() =>
-                                  copyToClipboard(msg.content, msg.id)
-                                }
-                                className="h-6 w-6 p-0"
-                              >
-                                {copiedMessageId === msg.id ? (
-                                  <Check className="h-3 w-3" />
-                                ) : (
-                                  <Copy className="h-3 w-3" />
-                                )}
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {msg.role === "user" && (
-                      <Avatar className="h-8 w-8 flex-shrink-0">
-                        <AvatarFallback>
-                          {user?.name?.[0]?.toUpperCase() ||
-                            user?.email?.[0]?.toUpperCase() ||
-                            "U"}
-                        </AvatarFallback>
-                      </Avatar>
-                    )}
-                  </div>
-                ))}
-
-                {isStreaming && (
-                  <div className="flex gap-4">
-                    <Avatar className="h-8 w-8 flex-shrink-0">
-                      <AvatarFallback className="bg-primary text-primary-foreground">
-                        AI
-                      </AvatarFallback>
-                    </Avatar>
-                    <Card>
-                      <CardContent className="p-4">
-                        <div className="flex items-center space-x-2">
-                          <div className="flex space-x-1">
-                            <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                            <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                            <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"></div>
-                          </div>
-                          <span className="text-sm text-muted-foreground">
-                            AI is thinking...
-                          </span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                )}
-
-                <div ref={messagesEndRef} />
-              </div>
+              <MessagesPane
+                messages={messages.map((m) => ({
+                  _id: m.id,
+                  text: m.content,
+                  sender: m.role === "user" ? "user" : "assistant",
+                  createdAt: m.timestamp,
+                }))}
+                userId={user?.id}
+              />
             )}
           </div>
 
-          {/* Composer */}
-          <div className="border-t p-4">
-            <form onSubmit={handleSend} className="max-w-4xl mx-auto">
-              <div className="relative flex items-end gap-2">
-                <div className="flex-1 relative">
-                  <Textarea
-                    ref={textareaRef}
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Ask anything about coding... (Enter to send, Shift+Enter for newline)"
-                    className="min-h-[60px] max-h-[200px] resize-none pr-12"
-                    disabled={isStreaming}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-2 bottom-2 h-8 w-8 p-0"
-                    disabled={isStreaming}
-                    onClick={() => setIsFileManagerOpen(true)}
-                    title="Attachments / File Manager"
-                  >
-                    <Paperclip className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                <div className="flex gap-2">
-                  {isStreaming ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setIsStreaming(false)}
-                    >
-                      <Square className="h-4 w-4" />
-                    </Button>
-                  ) : (
-                    <Button
-                      type="submit"
-                      size="sm"
-                      disabled={!message.trim()}
-                      className="btn-hover"
-                    >
-                      <Send className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              <p className="text-xs text-muted-foreground mt-2 text-center">
-                Press{" "}
-                <kbd className="px-1 py-0.5 bg-muted rounded text-xs">
-                  Enter
-                </kbd>{" "}
-                to send,{" "}
-                <kbd className="px-1 py-0.5 bg-muted rounded text-xs">
-                  Shift+Enter
-                </kbd>{" "}
-                for a new line
-              </p>
-            </form>
-          </div>
+          <Composer
+            onSend={async (text) => await handleSend(text)}
+            selectedModel={selectedModel}
+          />
         </div>
       </div>
+
       <FileManagerDialog
         open={isFileManagerOpen}
         onOpenChange={setIsFileManagerOpen}

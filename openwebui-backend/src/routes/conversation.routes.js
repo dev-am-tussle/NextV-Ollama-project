@@ -8,6 +8,7 @@ import {
   createModelMessage,
   appendToModelMessage,
   finalizeConversationTouch,
+  getConversation,
 } from "../services/chat.service.js";
 import { runModelStream } from "../services/ollama.service.js";
 
@@ -71,6 +72,23 @@ router.post("/:conversationId/messages", async (req, res) => {
       return res.status(400).json({ error: "Missing content" });
     }
 
+    // Log incoming request for debugging (dev only)
+    console.log(
+      `POST /conversations/${conversationId}/messages by user=${req.user.id} model=${model}`
+    );
+
+    if (model && typeof model !== "string") {
+      return res.status(400).json({ error: "Invalid model parameter" });
+    }
+
+    // Verify conversation exists and belongs to the user
+    const conv = await getConversation(conversationId, req.user.id);
+    if (!conv) {
+      return res
+        .status(404)
+        .json({ error: "Conversation not found or access denied" });
+    }
+
     // Persist user message
     const userMsg = await addUserMessage(conversationId, content);
 
@@ -99,7 +117,13 @@ router.post("/:conversationId/messages", async (req, res) => {
       const onError = (err) => reject(err);
 
       // Run model stream (will call onChunk/onClose)
-      runModelStream(model || "gemma:2b", content, onChunk, onClose, onError);
+      try {
+        runModelStream(model || "gemma:2b", content, onChunk, onClose, onError);
+      } catch (err) {
+        // handle synchronous errors (e.g., model not allowed)
+        console.error("runModelStream failed synchronously:", err);
+        reject(err);
+      }
     });
 
     // Return both messages (user and assistant) as the response
@@ -108,7 +132,10 @@ router.post("/:conversationId/messages", async (req, res) => {
       assistant: { id: modelMsg._id, text: collected },
     });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    // Log full error for server-side diagnosis
+    console.error("Error in POST /:conversationId/messages:", e);
+    // Return message and (in dev) stack to the client to aid debugging
+    res.status(500).json({ error: e.message, stack: e.stack });
   }
 });
 

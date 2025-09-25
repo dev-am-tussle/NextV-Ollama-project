@@ -5,6 +5,7 @@ type User = any;
 
 interface AuthContextType {
   user: User | null;
+  stats: any | null;
   isAuthenticated: boolean;
   loading: boolean;
   login: (payload: { email: string; password: string }) => Promise<any>;
@@ -23,6 +24,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [stats, setStats] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
   const isAuthenticated = !!user;
@@ -30,7 +32,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const refreshUser = async () => {
     try {
       const me = await authService.me();
-      setUser(me || null);
+      // backend returns { user, stats }
+      setUser(me?.user || null);
+      setStats(me?.stats || null);
     } catch (e) {
       setUser(null);
     } finally {
@@ -76,6 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     <AuthContext.Provider
       value={{
         user,
+        stats,
         isAuthenticated,
         loading,
         login,

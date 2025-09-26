@@ -1,4 +1,5 @@
-import { Conversation, Message } from "../models/ollama.models.js";
+import { Conversation } from "../models/conversation.model.js";
+import { Message } from "../models/ollama.models.js";
 
 export async function createConversation(userId, title) {
   return Conversation.create({

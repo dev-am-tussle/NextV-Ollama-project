@@ -1,6 +1,11 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { User, Conversation } from "../models/ollama.models.js";
+import { User, createUserWithDefaults } from "../models/user.models.js";
+import { Conversation } from "../models/conversation.model.js";
+import { UserSettings } from "../models/user.models.js";
+import { SavedPrompt } from "../models/savedPrompt.model.js";
+import { FileMeta } from "../models/file.model.js";
+import { exchangeCodeForToken, getMicrosoftProfile } from "./oauth.service.js";
 
 const ROUNDS = Number(process.env.BCRYPT_ROUNDS || 12);
 
@@ -22,16 +27,18 @@ export async function registerUser({ name, email, password }) {
 
   const password_hash = await bcrypt.hash(password, ROUNDS);
 
-  const user = await User.create({
+  // create user + default settings in a transaction
+  const { user, settings } = await createUserWithDefaults({
     name: name?.trim() || "",
     email,
     password_hash,
   });
 
-  const token = signToken(user);
+  // Do not auto-login — return a success message and minimal info
   return {
-    token,
+    message: "Registration successful. Please login.",
     user: { id: user._id, email: user.email, name: user.name },
+    settings_id: settings._id,
   };
 }
 
@@ -46,9 +53,147 @@ export async function loginUser({ email, password }) {
   if (!ok) throw new Error("Invalid credentials");
 
   const token = signToken(user);
+
+  // gather profile, settings and light-weight lists
+  const settings = user.settings_id
+    ? await UserSettings.findById(user.settings_id).lean()
+    : null;
+
+  const [conversationsCount, savedPromptsCount, savedFilesCount] =
+    await Promise.all([
+      Conversation.countDocuments({ user_id: user._id }),
+      SavedPrompt.countDocuments({ user_id: user._id }),
+      FileMeta.countDocuments({ user_id: user._id }),
+    ]);
+
+  const [savedPrompts, savedFiles] = await Promise.all([
+    SavedPrompt.find({ user_id: user._id })
+      .sort({ created_at: -1 })
+      .limit(10)
+      .lean(),
+    FileMeta.find({ user_id: user._id })
+      .sort({ created_at: -1 })
+      .limit(10)
+      .lean(),
+  ]);
+
   return {
+    message: "Login successful",
     token,
-    user: { id: user._id, email: user.email, name: user.name },
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      created_at: user.created_at,
+    },
+    settings,
+    meta: {
+      conversations_count: conversationsCount,
+      saved_prompts_count: savedPromptsCount,
+      saved_files_count: savedFilesCount,
+    },
+    saved_prompts: savedPrompts,
+    saved_files: savedFiles,
+  };
+}
+
+// find or create user from oauth provider (microsoft)
+export async function findOrCreateUserFromOAuth({
+  provider,
+  provider_id,
+  email,
+  profile,
+}) {
+  // 1) try find by provider id
+  let user = await User.findOne({
+    "auth_providers.provider": provider,
+    "auth_providers.provider_id": provider_id,
+  });
+  if (user) return user;
+
+  // 2) try find by email
+  if (email) {
+    user = await User.findOne({ email });
+    if (user) {
+      // link provider
+      user.auth_providers = user.auth_providers || [];
+      user.auth_providers.push({ provider, provider_id, profile });
+      user.email_verified = true;
+      await user.save();
+      return user;
+    }
+  }
+
+  // 3) create new user without password
+  const { user: createdUser } = await createUserWithDefaults({
+    name: profile.displayName || "",
+    email,
+    password_hash: null,
+  });
+  await User.updateOne(
+    { _id: createdUser._id },
+    {
+      $push: { auth_providers: { provider, provider_id, profile } },
+      $set: { email_verified: true },
+    }
+  );
+  return await User.findById(createdUser._id);
+}
+
+export async function loginWithOAuth({ provider, code, redirect_uri }) {
+  if (provider !== "microsoft") throw new Error("Unsupported provider");
+  const tokenRes = await exchangeCodeForToken(code, redirect_uri);
+  const access_token = tokenRes.access_token;
+  const profile = await getMicrosoftProfile(access_token);
+
+  // provider_id use profile.id (oid)
+  const user = await findOrCreateUserFromOAuth({
+    provider: "microsoft",
+    provider_id: profile.id,
+    email: profile.mail || profile.userPrincipalName,
+    profile,
+  });
+
+  // build same payload as loginUser
+  const token = signToken(user);
+  const settings = user.settings_id
+    ? await UserSettings.findById(user.settings_id).lean()
+    : null;
+  const [conversationsCount, savedPromptsCount, savedFilesCount] =
+    await Promise.all([
+      Conversation.countDocuments({ user_id: user._id }),
+      SavedPrompt.countDocuments({ user_id: user._id }),
+      FileMeta.countDocuments({ user_id: user._id }),
+    ]);
+
+  const [savedPrompts, savedFiles] = await Promise.all([
+    SavedPrompt.find({ user_id: user._id })
+      .sort({ created_at: -1 })
+      .limit(10)
+      .lean(),
+    FileMeta.find({ user_id: user._id })
+      .sort({ created_at: -1 })
+      .limit(10)
+      .lean(),
+  ]);
+
+  return {
+    message: "Login successful (Microsoft)",
+    token,
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      created_at: user.created_at,
+    },
+    settings,
+    meta: {
+      conversations_count: conversationsCount,
+      saved_prompts_count: savedPromptsCount,
+      saved_files_count: savedFilesCount,
+    },
+    saved_prompts: savedPrompts,
+    saved_files: savedFiles,
   };
 }
 

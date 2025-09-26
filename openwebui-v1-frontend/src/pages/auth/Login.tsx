@@ -15,6 +15,20 @@ import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff } from "lucide-react";
 
+const MicrosoftLogo = ({ className = "h-4 w-4" }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <rect x="3" y="3" width="8" height="8" fill="#F35325" />
+    <rect x="13" y="3" width="8" height="8" fill="#81BC06" />
+    <rect x="3" y="13" width="8" height="8" fill="#05A6F0" />
+    <rect x="13" y="13" width="8" height="8" fill="#FFBA08" />
+  </svg>
+);
+
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -157,6 +171,31 @@ const Login = () => {
           >
             ← Back to home
           </Link>
+        </div>
+        {/* Microsoft OAuth button */}
+        <div className="text-center mt-4">
+          <button
+            type="button"
+            onClick={() => {
+              const clientId = import.meta.env.VITE_MICROSOFT_CLIENT_ID;
+              const redirect = import.meta.env.VITE_MICROSOFT_REDIRECT_URI;
+              const tenant =
+                import.meta.env.VITE_MICROSOFT_TENANT_ID || "common";
+              const params = new URLSearchParams({
+                client_id: clientId,
+                response_type: "code",
+                redirect_uri: redirect,
+                response_mode: "query",
+                scope: "openid profile email",
+                prompt: "select_account",
+              });
+              window.location.href = `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize?${params.toString()}`;
+            }}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 border rounded-md mt-3 hover:bg-muted"
+          >
+            <MicrosoftLogo />
+            <span>Continue with Microsoft</span>
+          </button>
         </div>
       </div>
     </div>

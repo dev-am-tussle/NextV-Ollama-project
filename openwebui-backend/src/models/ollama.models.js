@@ -1,28 +1,5 @@
 import mongoose from "mongoose";
 
-// User Schema
-const UserSchema = new mongoose.Schema(
-  {
-    name: { type: String, trim: true },
-    email: {
-      type: String,
-      required: true,
-      unique: true,
-      lowercase: true,
-      trim: true,
-      index: true,
-    },
-    password_hash: { type: String, required: true },
-    created_at: { type: Date, default: Date.now },
-  },
-  {
-    versionKey: false,
-  }
-);
-
-// Secondary index for creation date queries (e.g., admin dashboards)
-UserSchema.index({ created_at: -1 });
-
 // Conversation Schema
 const ConversationSchema = new mongoose.Schema(
   {
@@ -73,11 +50,6 @@ const MessageSchema = new mongoose.Schema(
 
 // Compound index to efficiently paginate messages per conversation
 MessageSchema.index({ conversation_id: 1, created_at: 1, _id: 1 });
-
-// Model exports (reuse existing if hot reload / nodemon)
-export const User = mongoose.models.User || mongoose.model("User", UserSchema);
-export const Conversation =
-  mongoose.models.Conversation ||
-  mongoose.model("Conversation", ConversationSchema);
+// Export Message only from this file (Conversation moved to its own model file)
 export const Message =
   mongoose.models.Message || mongoose.model("Message", MessageSchema);

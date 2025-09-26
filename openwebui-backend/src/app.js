@@ -7,6 +7,9 @@ import morgan from "morgan";
 import modelRoutes from "./routes/ollama.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import conversationRoutes from "./routes/conversation.routes.js";
+import savedPromptsRoutes from "./routes/savedprompts.routes.js";
+import filesRoutes from "./routes/files.routes.js";
+import oauthRoutes from "./routes/oauth.routes.js";
 import { connectDB, closeDB } from "./config/ollama.db.js"; // DB helpers import
 
 dotenv.config();
@@ -36,6 +39,9 @@ app.get("/health", (req, res) => res.json({ status: "ok" }));
 app.use("/api/v1/models", modelRoutes);
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/conversations", conversationRoutes);
+app.use("/api/v1/saved-prompts", savedPromptsRoutes);
+app.use("/api/v1/files", filesRoutes);
+app.use("/api/v1/auth", oauthRoutes);
 
 app.get("/", (req, res) => {
   res.json({ message: "Welcome to OpenWebUI Backend API" });

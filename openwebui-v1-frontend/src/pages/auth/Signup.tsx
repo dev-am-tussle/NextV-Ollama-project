@@ -13,7 +13,23 @@ import {
 import { useAuth } from "@/providers/AuthProvider";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { TopRightToaster } from "@/components/ui/toaster";
 import { Eye, EyeOff, Check, X } from "lucide-react";
+
+// Microsoft SVG icon (4 squares)
+const MicrosoftLogo = ({ className = "h-4 w-4" }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <rect x="3" y="3" width="8" height="8" fill="#F35325" />
+    <rect x="13" y="3" width="8" height="8" fill="#81BC06" />
+    <rect x="3" y="13" width="8" height="8" fill="#05A6F0" />
+    <rect x="13" y="13" width="8" height="8" fill="#FFBA08" />
+  </svg>
+);
 
 const Signup = () => {
   const [email, setEmail] = useState("");
@@ -70,12 +86,14 @@ const Signup = () => {
     setIsLoading(true);
     try {
       await register({ name, email, password });
-      navigate("/");
       toast({
         title: "Account Created!",
         description:
           "Welcome to Pointer. Your account has been created successfully.",
       });
+      setInterval(() => {
+        navigate("/auth/login");
+      }, 2000);
     } catch (error) {
       toast({
         title: "Signup Failed",
@@ -89,6 +107,7 @@ const Signup = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center py-12 px-4">
+      <TopRightToaster />
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
           <h1 className="text-3xl font-bold">Create your account</h1>
@@ -267,6 +286,32 @@ const Signup = () => {
               >
                 Sign in
               </Link>
+            </div>
+
+            {/* Microsoft OAuth button */}
+            <div className="mt-4 text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  const clientId = import.meta.env.VITE_MICROSOFT_CLIENT_ID;
+                  const redirect = import.meta.env.VITE_MICROSOFT_REDIRECT_URI;
+                  const tenant =
+                    import.meta.env.VITE_MICROSOFT_TENANT_ID || "common";
+                  const params = new URLSearchParams({
+                    client_id: clientId,
+                    response_type: "code",
+                    redirect_uri: redirect,
+                    response_mode: "query",
+                    scope: "openid profile email",
+                    prompt: "select_account",
+                  });
+                  window.location.href = `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize?${params.toString()}`;
+                }}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 border rounded-md mt-3 hover:bg-muted"
+              >
+                <MicrosoftLogo />
+                <span>Continue with Microsoft</span>
+              </button>
             </div>
           </CardContent>
         </Card>

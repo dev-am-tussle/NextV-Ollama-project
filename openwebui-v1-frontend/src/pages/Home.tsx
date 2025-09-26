@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import * as authService from "@/services/auth";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,6 +48,18 @@ const Home = () => {
     elements.forEach((el) => observer.observe(el));
 
     return () => observer.disconnect();
+  }, []);
+
+  // Debug: fetch /auth/me on mount and print response so you can inspect user details
+  useEffect(() => {
+    (async function fetchMe() {
+      try {
+        const me = await authService.me();
+        console.log("[Home] /auth/me response:", me);
+      } catch (err) {
+        console.warn("[Home] /auth/me failed:", err);
+      }
+    })();
   }, []);
 
   return (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { GitCompare } from "lucide-react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { useAuth } from "@/providers/AuthProvider";
@@ -9,7 +9,7 @@ import {
   getMessages as fetchMessages,
   postMessage,
 } from "@/services/conversation";
-import { streamGenerate } from "@/services/ollama";
+// streaming handled via hook now
 import {
   ModelKey,
   modelIcon,
@@ -22,6 +22,9 @@ import { SettingsDialog } from "@/components/chat/settings-dialog";
 import { ChatHeader } from "@/components/chat/ChatHeader";
 import { MessagesPane } from "@/components/chat/MessagesPane";
 import { Composer } from "@/components/chat/Composer";
+import { useChatMessaging } from "@/hooks/useChatMessaging";
+import { ChatStatusBar } from "@/components/chat/ChatStatusBar";
+import ChatGeneratingOverlay from "@/components/chat/ChatGeneratingOverlay";
 
 interface Message {
   id: string;
@@ -61,7 +64,7 @@ const Chat: React.FC = () => {
   const { toast } = useToast();
 
   const [message, setMessage] = useState("");
-  const [isStreaming, setIsStreaming] = useState(false);
+  // isStreaming managed inside useChatMessaging
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<ModelKey>("Gemma");
@@ -243,171 +246,23 @@ const Chat: React.FC = () => {
     setIsSettingsOpen(true);
   };
 
+  const { sendMessage, isStreaming, status, abort } = useChatMessaging({
+    selectedModel,
+    setThreads,
+    setActiveThreadId,
+    toast: (o) =>
+      toast({
+        title: o.title,
+        description: o.description,
+        variant: o.variant === "destructive" ? "destructive" : "default",
+      }),
+  });
+
   const handleSend = async (text?: string) => {
     const sendText = text ?? message;
-    if (!sendText.trim() || isStreaming) return;
-
-    let currentThreadId = activeThreadId;
-    // If there is no active thread, or the active thread is a local-only thread
-    // (created with id prefix "local-"), create/persist a backend conversation
-    // and replace the local thread with the persisted one (preserve messages).
-    if (!currentThreadId || String(currentThreadId).startsWith("local-")) {
-      try {
-        const conv = await createConversation(sendText.slice(0, 50));
-        const backendId = conv._id;
-
-        // Preserve existing messages from local thread (if any)
-        const localMessages =
-          threads.find((t) => t.id === currentThreadId)?.messages || [];
-
-        // Replace local thread with backend-persisted thread (put it at top)
-        const newThread: ChatThread = {
-          id: backendId,
-          // coerce backend title to string to be safe
-          title: String(conv.title || sendText.slice(0, 50)),
-          messages: localMessages,
-          updatedAt: new Date(),
-          model: selectedModel,
-        };
-
-        setThreads((prev) => [
-          newThread,
-          ...prev.filter((t) => t.id !== currentThreadId),
-        ]);
-        currentThreadId = backendId;
-        setActiveThreadId(currentThreadId);
-      } catch (err: unknown) {
-        toast({ title: "Error", description: "Unable to create conversation" });
-        return;
-      }
-    }
-
-    const userMessage: Message = {
-      id: String(Date.now()),
-      role: "user",
-      content: sendText,
-      timestamp: new Date(),
-    };
-    setThreads((prev) =>
-      prev.map((t) =>
-        t.id === currentThreadId
-          ? { ...t, messages: [...t.messages, userMessage] }
-          : t
-      )
-    );
+    if (!sendText.trim()) return;
     setMessage("");
-    setIsStreaming(true);
-
-    try {
-      // Derive backend model id from the single source `keyToBackend`.
-      const backendModelId = keyToBackend[selectedModel] || undefined;
-
-      // If using the local streaming model (Gemma maps to ollama local gemma:2b),
-      // use the SSE streaming endpoint. We check by UI key to avoid string-case bugs.
-      if (selectedModel === "Gemma") {
-        // Append an assistant placeholder message
-        const assistantId = `assistant-${Date.now()}`;
-        const assistantMessage: Message = {
-          id: assistantId,
-          role: "assistant",
-          content: "",
-          timestamp: new Date(),
-        };
-        setThreads((prev) =>
-          prev.map((t) =>
-            t.id === currentThreadId
-              ? { ...t, messages: [...t.messages, assistantMessage] }
-              : t
-          )
-        );
-
-        let collected = "";
-        console.debug("Starting streamGenerate", {
-          conversationId: currentThreadId,
-          model: backendModelId,
-        });
-        await streamGenerate(
-          { prompt: sendText, modelId: backendModelId || "gemma:2b" },
-          {
-            onChunk: (chunk) => {
-              collected += chunk;
-              // append chunk locally to assistant message
-              setThreads((prev) =>
-                prev.map((t) =>
-                  t.id === currentThreadId
-                    ? {
-                        ...t,
-                        messages: t.messages.map((m) =>
-                          m.id === assistantId
-                            ? { ...m, content: m.content + chunk }
-                            : m
-                        ),
-                      }
-                    : t
-                )
-              );
-            },
-            onError: (err) => {
-              toast({
-                title: "Stream error",
-                description: String(err?.message || err),
-              });
-            },
-          }
-        );
-
-        // persist the assistant message via conversation post (server will create model message)
-        try {
-          await postMessage(currentThreadId, collected, backendModelId);
-        } catch (err: unknown) {
-          // show an error toast but keep local content
-          toast({
-            title: "Persist error",
-            description:
-              (err as Error)?.message || "Failed to persist assistant message",
-          });
-          // log server error body (apiFetch attaches it to Error.body)
-          console.error("postMessage persist error:", err);
-        }
-      } else {
-        const respUnknown = await postMessage(
-          currentThreadId,
-          sendText,
-          backendModelId
-        );
-        interface PostMessageResp {
-          assistant?: { id?: string; text?: string };
-          [k: string]: unknown;
-        }
-        const resp = respUnknown as PostMessageResp;
-        const assistantText = resp.assistant?.text || "";
-        const assistantMessage: Message = {
-          id: resp.assistant?.id || String(Date.now() + 1),
-          role: "assistant",
-          content: assistantText,
-          timestamp: new Date(),
-        };
-        setThreads((prev) =>
-          prev.map((t) =>
-            t.id === currentThreadId
-              ? {
-                  ...t,
-                  messages: [...t.messages, assistantMessage],
-                  updatedAt: new Date(),
-                }
-              : t
-          )
-        );
-      }
-    } catch (err: unknown) {
-      toast({
-        title: "Error",
-        description: (err as Error)?.message || "Failed to send message",
-        variant: "destructive",
-      });
-    } finally {
-      setIsStreaming(false);
-    }
+    await sendMessage(sendText, activeThreadId, threads);
   };
 
   const filteredSuggestions = MODEL_INFO[selectedModel].suggestions.filter(
@@ -437,9 +292,20 @@ const Chat: React.FC = () => {
       .includes(chatSearch.toLowerCase())
   );
 
+  // Scroll management for messages
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const bottomAnchorRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    // Auto-scroll on new message append (when user or assistant messages length changes)
+    bottomAnchorRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "end",
+    });
+  }, [messages.length]);
+
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full">
+      <div className="flex h-screen w-full overflow-hidden">
         <ChatSidebar
           threads={filteredThreads.map((t) => ({
             id: t.id,
@@ -500,7 +366,7 @@ const Chat: React.FC = () => {
           }}
         />
 
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-h-0">
           <ChatHeader
             // ensure title is a string to prevent React rendering objects
             title={String(activeThread?.title || "New Chat")}
@@ -512,7 +378,11 @@ const Chat: React.FC = () => {
             onOpenSettings={openSettings}
           />
 
-          <div className="flex-1 overflow-auto p-6">
+          {/* Scrollable messages region only */}
+          <div
+            ref={scrollRef}
+            className="flex-1 min-h-0 overflow-y-auto p-6 relative"
+          >
             {compareMode && (
               <div className="mb-4 p-3 text-xs rounded-md border bg-muted/30 flex items-center gap-2">
                 <GitCompare className="h-4 w-4" /> Compare Mode active.
@@ -520,63 +390,94 @@ const Chat: React.FC = () => {
               </div>
             )}
 
-            {messages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-center space-y-6 max-w-2xl mx-auto">
-                <div className="flex flex-col items-center space-y-3">
-                  <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
-                    {modelIcon(selectedModel)}
+            <div className="relative min-h-full">
+              {messages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-center space-y-6 max-w-2xl mx-auto">
+                  <div className="flex flex-col items-center space-y-3">
+                    <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
+                      {modelIcon(selectedModel)}
+                    </div>
+                    <h3 className="text-xl font-semibold">
+                      {selectedModel} Ready
+                    </h3>
+                    <p className="text-muted-foreground text-sm">
+                      {MODEL_INFO[selectedModel].intro}
+                    </p>
                   </div>
-                  <h3 className="text-xl font-semibold">
-                    {selectedModel} Ready
-                  </h3>
-                  <p className="text-muted-foreground text-sm">
-                    {MODEL_INFO[selectedModel].intro}
-                  </p>
-                </div>
 
-                <div className="w-full space-y-3">
-                  <input
-                    type="text"
-                    value={suggestionSearch}
-                    onChange={(e) => setSuggestionSearch(e.target.value)}
-                    placeholder="Search suggestions..."
-                    className="w-full px-3 py-2 text-sm border rounded-md bg-background"
-                  />
-                  <div className="flex flex-wrap gap-2 justify-center">
-                    {filteredSuggestions.map((prompt) => (
-                      <button
-                        key={prompt}
-                        className="btn btn-outline btn-sm text-xs"
-                        onClick={() => setMessage(prompt)}
-                      >
-                        {prompt}
-                      </button>
-                    ))}
-                    {filteredSuggestions.length === 0 && (
-                      <p className="text-xs text-muted-foreground">
-                        No suggestions found.
-                      </p>
-                    )}
+                  <div className="w-full space-y-3">
+                    <input
+                      type="text"
+                      value={suggestionSearch}
+                      onChange={(e) => setSuggestionSearch(e.target.value)}
+                      placeholder="Search suggestions..."
+                      className="w-full px-3 py-2 text-sm border rounded-md bg-background"
+                    />
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      {filteredSuggestions.map((prompt) => (
+                        <button
+                          key={prompt}
+                          className="btn btn-outline btn-sm text-xs"
+                          onClick={() => setMessage(prompt)}
+                        >
+                          {prompt}
+                        </button>
+                      ))}
+                      {filteredSuggestions.length === 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          No suggestions found.
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ) : (
-              <MessagesPane
-                messages={messages.map((m) => ({
-                  _id: m.id,
-                  text: m.content,
-                  sender: m.role === "user" ? "user" : "assistant",
-                  createdAt: m.timestamp,
-                }))}
-                userId={user?.id}
+              ) : (
+                <MessagesPane
+                  messages={messages.map((m) => ({
+                    _id: m.id,
+                    id: m.id,
+                    text: m.content,
+                    sender: m.role === "user" ? "user" : "assistant",
+                    createdAt: m.timestamp,
+                    // flags may already exist on underlying message objects if they were added by hook
+                    // (Type assertion defensive merge)
+                    ...((m as any).isSkeleton
+                      ? { isSkeleton: (m as any).isSkeleton }
+                      : {}),
+                    ...((m as any).isStreaming
+                      ? { isStreaming: (m as any).isStreaming }
+                      : {}),
+                  }))}
+                  userId={user?.id}
+                />
+              )}
+              <div ref={bottomAnchorRef} />
+              <ChatGeneratingOverlay
+                active={
+                  isStreaming ||
+                  [
+                    "creating-conversation",
+                    "streaming-assistant",
+                    "finalizing",
+                  ].includes(status)
+                }
+                status={status}
               />
-            )}
+            </div>
           </div>
 
-          <Composer
-            onSend={async (text) => await handleSend(text)}
-            selectedModel={selectedModel}
-          />
+          {/* Fixed bottom input + status bar (outside scroll area) */}
+          <div className="shrink-0 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75">
+            <Composer
+              onSend={async (text) => await handleSend(text)}
+              selectedModel={selectedModel}
+            />
+            <ChatStatusBar
+              status={status}
+              streaming={isStreaming}
+              onAbort={abort}
+            />
+          </div>
         </div>
       </div>
 

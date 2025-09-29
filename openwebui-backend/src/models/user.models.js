@@ -7,10 +7,14 @@ const UserSettingsSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      index: true,
     },
     theme: { type: String, default: "light" },
     default_model: { type: String, default: "gemma:2b" },
+    // list of available models for this user (default global whitelist)
+    avail_models: {
+      type: [String],
+      default: ["gemma:2b", "phi:2.7b"],
+    },
     saved_prompts_ref: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "SavedPrompt",

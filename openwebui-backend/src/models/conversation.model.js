@@ -6,7 +6,6 @@ const ConversationSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      index: true,
     },
     title: { type: String, trim: true },
     last_seq: { type: Number, default: 0 },

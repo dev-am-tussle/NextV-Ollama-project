@@ -1,6 +1,15 @@
 import { runModelStream } from "../services/ollama.service.js";
+import * as chatService from "../services/chat.service.js";
 
-export function streamGenerate(req, res) {
+// helper to safe-send SSE events
+function sseSend(res, event, payload) {
+  if (event) {
+    res.write(`event: ${event}\n`);
+  }
+  res.write(`data: ${JSON.stringify(payload || {})}\n\n`);
+}
+
+export async function streamGenerate(req, res) {
   try {
     const { modelId, prompt } = req.body || {};
 
@@ -27,41 +36,106 @@ export function streamGenerate(req, res) {
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders?.();
 
-    // Helper to send a chunk of client
+    // Ensure we have a conversation id (either provided or create new)
+    const conversationId = req.body.conversationId;
+    let convoDoc = null;
+    const userId = req.user?.id;
+    if (conversationId) {
+      // verify ownership
+      convoDoc = await chatService.getConversation(conversationId, userId);
+      if (!convoDoc) {
+        return res.status(404).json({ error: "Conversation not found." });
+      }
+    } else {
+      // create conversation for user
+      convoDoc = await chatService.createConversation(userId, "New Chat");
+    }
+
+    const convoId = convoDoc._id || convoDoc.id;
+
+    // Persist user message first (include user id)
+    const userMsg = await chatService.addUserMessage(convoId, prompt, userId);
+
+    // Create assistant placeholder message and immediately send its id to client
+    const assistantMsg = await chatService.createModelMessage(convoId);
+    sseSend(res, "message_id", { message_id: assistantMsg._id.toString() });
+
+    // Helper to send chunk event
     const sendChunk = (data) => {
-      res.write(`data: ${JSON.stringify({ chunk: data })}\n\n`);
+      sseSend(res, "chunk", { chunk: data });
     };
 
-    // Start model stream
+    let finished = false;
 
+    // Start model stream
     const proc = runModelStream(
       modelId,
       prompt,
-      (chunk) => sendChunk(chunk),
-      () => {
-        res.write(`event: done\ndata: {}\n\n`);
+      async (chunk) => {
+        try {
+          // append chunk to DB (async, best-effort)
+          await chatService.appendToModelMessage(assistantMsg._id, chunk);
+        } catch (e) {
+          console.error("Failed to append chunk to model message:", e);
+        }
+        sendChunk(chunk);
+      },
+      async (code) => {
+        if (finished) return;
+        finished = true;
+        try {
+          // finalize: collapse chunks into text and mark done
+          await chatService.finalizeModelMessage(assistantMsg._id);
+          await chatService.finalizeConversationTouch(convoId);
+          sseSend(res, "done", {});
+        } catch (e) {
+          console.error("Error finalizing model message:", e);
+        }
         res.end();
       },
-      (err) => {
-        // onError
-        res.write(
-          `event: error\ndata: ${JSON.stringify({ message: err.message })}\n\n`
-        );
-
+      async (err) => {
+        if (finished) return;
+        finished = true;
+        console.error("Model stream error:", err);
+        try {
+          await chatService.appendToModelMessage(
+            assistantMsg._id,
+            "\n[Model error: " + err.message + "]"
+          );
+          await chatService.markModelMessageError(
+            assistantMsg._id,
+            err.message
+          );
+        } catch (e) {}
+        sseSend(res, "error", { message: err.message });
         res.end();
       }
     );
 
-    // If client closes connection, kill the process
-    req.on("close", () => {
+    // If client closes connection, kill the process and mark message
+    req.on("close", async () => {
       try {
         proc.kill();
       } catch (e) {}
-      res.end();
+      if (!finished) {
+        finished = true;
+        try {
+          await chatService.appendToModelMessage(
+            assistantMsg._id,
+            "\n[Client disconnected]"
+          );
+          await chatService.markModelMessageError(
+            assistantMsg._id,
+            "client_disconnected"
+          );
+        } catch (e) {}
+      }
+      try {
+        res.end();
+      } catch (e) {}
     });
   } catch (err) {
     console.error("Error in streamGenerate: ", err);
     res.status(500).json({ error: "Unexpected server error." });
   }
 }
-

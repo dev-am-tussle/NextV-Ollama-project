@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 const FileMetaSchema = new mongoose.Schema(
   {
-    user_id: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
+    user_id: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     conversation_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Conversation",

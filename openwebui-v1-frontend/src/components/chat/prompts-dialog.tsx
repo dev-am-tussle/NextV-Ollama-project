@@ -24,6 +24,7 @@ interface PromptsDialogProps {
   search: string;
   onSearch: (v: string) => void;
   prompts: PromptItem[];
+  savedCount?: number | null;
   onSelect: (p: PromptItem) => void;
 }
 
@@ -33,6 +34,7 @@ export const PromptsDialog: React.FC<PromptsDialogProps> = ({
   search,
   onSearch,
   prompts,
+  savedCount,
   onSelect,
 }) => {
   const filtered = prompts.filter(
@@ -46,7 +48,16 @@ export const PromptsDialog: React.FC<PromptsDialogProps> = ({
         <DialogHeader>
           <DialogTitle>Saved Prompts</DialogTitle>
           <DialogDescription>
-            Reuse and manage your frequently used prompts.
+            Manage your personal saved prompts.
+            {typeof savedCount === "number" ? (
+              <span className="text-xs text-muted-foreground block">
+                Saved Prompts: <span className="font-medium">{savedCount}</span>
+              </span>
+            ) : (
+              <span className="text-xs text-muted-foreground block">
+                Saved prompts count unavailable.
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -60,30 +71,35 @@ export const PromptsDialog: React.FC<PromptsDialogProps> = ({
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           </div>
           <div className="space-y-2 max-h-60 overflow-auto pr-1">
-            {filtered.length === 0 && (
-              <p className="text-xs text-muted-foreground text-center py-6">
-                No prompts found.
+            {prompts.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-10">
+                No saved prompts yet.
               </p>
+            ) : filtered.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-6">
+                No results for your search.
+              </p>
+            ) : (
+              filtered.map((p) => (
+                <Card
+                  key={p.id}
+                  className="hover:bg-accent cursor-pointer transition"
+                  onClick={() => {
+                    onSelect(p);
+                    onOpenChange(false);
+                  }}
+                >
+                  <CardContent className="p-3 space-y-1">
+                    <p className="text-sm font-medium leading-none truncate">
+                      {p.title}
+                    </p>
+                    <p className="text-xs text-muted-foreground line-clamp-2">
+                      {p.content}
+                    </p>
+                  </CardContent>
+                </Card>
+              ))
             )}
-            {filtered.map((p) => (
-              <Card
-                key={p.id}
-                className="hover:bg-accent cursor-pointer transition"
-                onClick={() => {
-                  onSelect(p);
-                  onOpenChange(false);
-                }}
-              >
-                <CardContent className="p-3 space-y-1">
-                  <p className="text-sm font-medium leading-none truncate">
-                    {p.title}
-                  </p>
-                  <p className="text-xs text-muted-foreground line-clamp-2">
-                    {p.content}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
           </div>
         </div>
         <DialogFooter>

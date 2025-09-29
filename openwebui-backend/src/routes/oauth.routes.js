@@ -9,7 +9,8 @@ function buildMicrosoftAuthUrl({ state }) {
   const tenant = process.env.MICROSOFT_TENANT_ID || "common";
   const clientId = process.env.MICROSOFT_CLIENT_ID;
   const redirectUri = encodeURIComponent(
-    process.env.MICROSOFT_REDIRECT_URI || "http://localhost:3000/api/v1/auth/callback"
+    process.env.MICROSOFT_REDIRECT_URI ||
+      "http://localhost:3000/api/v1/auth/callback"
   );
   const scope = encodeURIComponent(
     process.env.MICROSOFT_OAUTH_SCOPE || "openid profile email offline_access"
@@ -95,7 +96,9 @@ router.get("/callback", async (req, res) => {
     });
 
     // Optional: also pass short-lived page to set localStorage (if SPA reads from there).
-    // Simpler: direct redirect; frontend can call /auth/me using cookie.
+    // Simpler: direct redirect; frontend should use the login response (or
+    // exchange POST /auth/microsoft) and persist the profile locally instead
+    // of calling a separate /auth/me endpoint.
     return res.redirect("/");
   } catch (err) {
     console.error("/auth/callback error", err);

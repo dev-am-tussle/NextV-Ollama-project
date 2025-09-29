@@ -19,20 +19,23 @@ export async function listConversations(userId, limit = 20) {
     .lean();
 }
 
-export async function addUserMessage(conversationId, text) {
+export async function addUserMessage(conversationId, text, userId) {
   return Message.create({
     conversation_id: conversationId,
+    user_id: userId || null,
     sender: "user",
     text,
     status: "done",
   });
 }
 
-export async function createModelMessage(conversationId) {
+export async function createModelMessage(conversationId, modelName) {
   return Message.create({
     conversation_id: conversationId,
     sender: "model",
+    model: modelName || null,
     text: "",
+    chunks: [],
     status: "streaming",
   });
 }
@@ -44,6 +47,26 @@ export async function appendToModelMessage(messageId, chunk) {
   await Message.updateOne(
     { _id: messageId },
     { $push: { chunks: chunk }, $set: { updated_at: new Date() } }
+  );
+}
+
+export async function finalizeModelMessage(messageId) {
+  const m = await Message.findById(messageId);
+  if (!m) return null;
+  // Merge chunks into text
+  const finalText = (m.text || "") + (m.chunks ? m.chunks.join("") : "");
+  m.text = finalText;
+  m.chunks = [];
+  m.status = "done";
+  m.updated_at = new Date();
+  await m.save();
+  return m;
+}
+
+export async function markModelMessageError(messageId, errorMsg) {
+  await Message.updateOne(
+    { _id: messageId },
+    { $set: { status: "error", error: errorMsg, updated_at: new Date() } }
   );
 }
 

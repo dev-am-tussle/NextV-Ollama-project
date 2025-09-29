@@ -50,17 +50,8 @@ const Home = () => {
     return () => observer.disconnect();
   }, []);
 
-  // Debug: fetch /auth/me on mount and print response so you can inspect user details
-  useEffect(() => {
-    (async function fetchMe() {
-      try {
-        const me = await authService.me();
-        console.log("[Home] /auth/me response:", me);
-      } catch (err) {
-        console.warn("[Home] /auth/me failed:", err);
-      }
-    })();
-  }, []);
+  // Note: removed debug fetch to /auth/me (endpoint removed). Use login response
+  // stored in localStorage (key: authProfile) for inspecting user details.
 
   return (
     <div className="min-h-screen">

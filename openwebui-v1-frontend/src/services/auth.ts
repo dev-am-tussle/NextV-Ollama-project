@@ -66,6 +66,13 @@ export async function login(payload: LoginPayload): Promise<AuthResponse> {
     setAuthToken(token);
   }
 
+  // Persist the full login response (user, settings, meta) so the frontend
+  // can use it instead of calling /auth/me. This simplifies the auth flow.
+  try {
+    if (res) localStorage.setItem("authProfile", JSON.stringify(res));
+    else localStorage.removeItem("authProfile");
+  } catch (_) {}
+
   return res;
 }
 
@@ -80,11 +87,19 @@ export async function logout(): Promise<void> {
   } finally {
     setAuthToken(null);
     try {
+      localStorage.removeItem("authProfile");
     } catch (_) {}
   }
 }
 
 // fetch current user info
 export async function me(): Promise<any> {
-  return apiFetch("auth/me");
+  // Return profile stored at login. This avoids an extra network call.
+  try {
+    const raw = localStorage.getItem("authProfile");
+    if (!raw) throw new Error("No auth profile stored");
+    return JSON.parse(raw);
+  } catch (e) {
+    throw new Error("No auth profile available");
+  }
 }

@@ -6,7 +6,6 @@ import {
   revokeToken,
 } from "../services/auth.service.js";
 import { requireAuth } from "../middleware/auth.js";
-import { getUserProfile } from "../services/auth.service.js";
 
 const router = express.Router();
 
@@ -53,22 +52,8 @@ router.post("/logout", async (req, res) => {
 });
 
 // get current user (for debugging/testing)
-router.get("/me", requireAuth, async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
-
-    const data = await getUserProfile(userId);
-    return res.json(data);
-  } catch (err) {
-    console.error("GET /auth/me error:", err);
-    // map known errors to status codes
-    if (err.message === "User not found")
-      return res.status(404).json({ error: err.message });
-    if (err.message === "Missing user id")
-      return res.status(400).json({ error: err.message });
-    return res.status(500).json({ error: "Failed to fetch current user" });
-  }
-});
+// NOTE: /auth/me endpoint removed. Frontend should consume user/profile from
+// the login response which is stored client-side. This avoids an extra API
+// endpoint and simplifies the auth flow.
 
 export default router;

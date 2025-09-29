@@ -10,7 +10,11 @@ import {
   postMessage,
 } from "@/services/conversation";
 import { streamGenerate } from "@/services/ollama";
-import { ModelKey, modelIcon } from "@/components/chat/model-selector";
+import {
+  ModelKey,
+  modelIcon,
+  keyToBackend,
+} from "@/components/chat/model-selector";
 import { ChatSidebar } from "@/components/chat/sidebar";
 import { FileManagerDialog } from "@/components/chat/file-manager-dialog";
 import { PromptsDialog, PromptItem } from "@/components/chat/prompts-dialog";
@@ -35,14 +39,6 @@ interface ChatThread {
 }
 
 const MODEL_INFO: Record<ModelKey, { intro: string; suggestions: string[] }> = {
-  Mistral: {
-    intro:
-      "Mistral is a fast, efficient general-purpose model. Great for concise answers & code refactors.",
-    suggestions: [
-      "Refactor this React component for performance",
-      "Summarize this block of code",
-    ],
-  },
   Gemma: {
     intro: "Gemma excels at reasoning & structured generation.",
     suggestions: ["Explain this algorithm step by step"],
@@ -51,21 +47,24 @@ const MODEL_INFO: Record<ModelKey, { intro: string; suggestions: string[] }> = {
     intro: "Phi is lightweight and great for quick iterative coding tasks.",
     suggestions: ["Create a simple Express route"],
   },
-  Ollama: {
-    intro: "Ollama (local) lets you run models on-device.",
-    suggestions: ["How to run a local LLM securely"],
-  },
 };
 
 const Chat: React.FC = () => {
-  const { isAuthenticated, user, logout: signout, loading } = useAuth();
+  const {
+    isAuthenticated,
+    user,
+    logout: signout,
+    loading,
+    savedPrompts: authSavedPrompts,
+    stats,
+  } = useAuth();
   const { toast } = useToast();
 
   const [message, setMessage] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
-  const [selectedModel, setSelectedModel] = useState<ModelKey>("Mistral");
+  const [selectedModel, setSelectedModel] = useState<ModelKey>("Gemma");
   const [compareMode, setCompareMode] = useState(false);
   const [suggestionSearch, setSuggestionSearch] = useState("");
   const [chatSearch, setChatSearch] = useState("");
@@ -109,19 +108,24 @@ const Chat: React.FC = () => {
         if (!mounted) return;
         const mapped = (Array.isArray(convs) ? convs : []).map((c) => {
           const obj = c as Record<string, unknown>;
-            return {
-              id: String(obj._id),
-              title: normalizeTitle(obj.title),
-              messages: [],
-              updatedAt: obj.updated_at ? new Date(String(obj.updated_at)) : new Date(),
-            };
+          return {
+            id: String(obj._id),
+            title: normalizeTitle(obj.title),
+            messages: [],
+            updatedAt: obj.updated_at
+              ? new Date(String(obj.updated_at))
+              : new Date(),
+          };
         });
 
         // Log any suspicious titles (only in development to avoid noise in prod)
         if (process.env.NODE_ENV !== "production") {
           mapped.forEach((m) => {
             // Heuristic: title that looks like JSON object or default Object toString
-            if (m.title.startsWith("{") || m.title.startsWith("[object Object")) {
+            if (
+              m.title.startsWith("{") ||
+              m.title.startsWith("[object Object")
+            ) {
               console.warn(
                 "Non-string or object-like conversation title received, normalized to:",
                 m.title
@@ -129,9 +133,26 @@ const Chat: React.FC = () => {
             }
           });
         }
+        // Set the threads list but do NOT auto-select an existing conversation.
+        // This ensures all users (new or existing) see the "new chat" intro
+        // and can choose to resume an existing conversation from the sidebar.
         setThreads(mapped);
-        if (mapped.length > 0 && !activeThreadId)
-          setActiveThreadId(mapped[0].id);
+
+        // Restore last active thread from localStorage unless the user just logged in
+        try {
+          const justLoggedIn = localStorage.getItem("authJustLoggedIn");
+          if (justLoggedIn) {
+            // clear the flag so subsequent refreshes will restore
+            localStorage.removeItem("authJustLoggedIn");
+          } else {
+            const last = localStorage.getItem("lastActiveThreadId");
+            if (last) {
+              // only restore if it exists in mapped list
+              const exists = mapped.find((m) => m.id === last);
+              if (exists) setActiveThreadId(last);
+            }
+          }
+        } catch (_) {}
       } catch (err) {
         // ignore
       }
@@ -139,8 +160,8 @@ const Chat: React.FC = () => {
     return () => {
       mounted = false;
     };
-  // activeThreadId intentionally omitted: we only want to load conversations once after auth ready
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // activeThreadId intentionally omitted: we only want to load conversations once after auth ready
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, isAuthenticated]);
 
   const activeThread = threads.find((t) => t.id === activeThreadId);
@@ -169,6 +190,9 @@ const Chat: React.FC = () => {
     };
     setThreads((prev) => [t, ...prev]);
     setActiveThreadId(t.id);
+    try {
+      localStorage.setItem("lastActiveThreadId", t.id);
+    } catch (_) {}
   };
 
   // Fetch messages for a conversation when a persisted (non-local) thread is active
@@ -191,7 +215,9 @@ const Chat: React.FC = () => {
             id,
             role: obj?.sender === "user" ? "user" : "assistant",
             content: (obj?.text as string) || (obj?.content as string) || "",
-            timestamp: obj?.created_at ? new Date(String(obj.created_at)) : new Date(),
+            timestamp: obj?.created_at
+              ? new Date(String(obj.created_at))
+              : new Date(),
           } as Message;
         });
         setThreads((prev) =>
@@ -273,17 +299,12 @@ const Chat: React.FC = () => {
     setIsStreaming(true);
 
     try {
-      // Map our UI model keys to backend model identifiers where applicable
-      const modelMap: Record<string, string | undefined> = {
-        Mistral: "mistral:latest",
-        Gemma: "gemma:2b",
-        Phi: "phi:2.7b",
-        Ollama: "gemma:2b", // use local gemma for client-side streaming path
-      };
-      const backendModelId = modelMap[selectedModel] || undefined;
+      // Derive backend model id from the single source `keyToBackend`.
+      const backendModelId = keyToBackend[selectedModel] || undefined;
 
-      // If using local Ollama model (or modelId indicates streaming), use SSE streaming endpoint
-      if (selectedModel === "Ollama") {
+      // If using the local streaming model (Gemma maps to ollama local gemma:2b),
+      // use the SSE streaming endpoint. We check by UI key to avoid string-case bugs.
+      if (selectedModel === "Gemma") {
         // Append an assistant placeholder message
         const assistantId = `assistant-${Date.now()}`;
         const assistantMessage: Message = {
@@ -301,8 +322,12 @@ const Chat: React.FC = () => {
         );
 
         let collected = "";
+        console.debug("Starting streamGenerate", {
+          conversationId: currentThreadId,
+          model: backendModelId,
+        });
         await streamGenerate(
-          { prompt: sendText, modelId: "gemma:2b" },
+          { prompt: sendText, modelId: backendModelId || "gemma:2b" },
           {
             onChunk: (chunk) => {
               collected += chunk;
@@ -389,27 +414,17 @@ const Chat: React.FC = () => {
     (s) => s.toLowerCase().includes(suggestionSearch.toLowerCase())
   );
 
-  const prompts: PromptItem[] = useMemo(
-    () => [
-      {
-        id: "p1",
-        title: "Brainstorm feature ideas",
-        content:
-          "Act as a senior engineer and brainstorm new feature ideas for a SaaS dashboard.",
-      },
-      {
-        id: "p2",
-        title: "Explain code",
-        content: "Explain what this code does and potential edge cases.",
-      },
-      {
-        id: "p3",
-        title: "Optimize query",
-        content: "Suggest optimizations for this SQL query.",
-      },
-    ],
-    []
-  );
+  const prompts: PromptItem[] = useMemo(() => {
+    if (Array.isArray(authSavedPrompts) && authSavedPrompts.length > 0) {
+      return authSavedPrompts.map((p: any, idx: number) => ({
+        id: String(p._id || p.id || `ap-${idx}`),
+        title: String(p.title || p.name || "Untitled Prompt"),
+        content: String(p.content || p.prompt || ""),
+      }));
+    }
+    // No fallback defaults per user request
+    return [];
+  }, [authSavedPrompts]);
 
   const filteredPrompts = prompts.filter(
     (p) =>
@@ -429,12 +444,18 @@ const Chat: React.FC = () => {
           threads={filteredThreads.map((t) => ({
             id: t.id,
             // ensure title is a string
-            title: typeof t.title === "string" ? t.title || "New Chat" : "New Chat",
+            title:
+              typeof t.title === "string" ? t.title || "New Chat" : "New Chat",
             updatedAt: t.updatedAt,
             messagesCount: t.messages.length,
           }))}
           activeId={activeThreadId}
-          onSelect={setActiveThreadId}
+          onSelect={(id: string) => {
+            setActiveThreadId(id);
+            try {
+              localStorage.setItem("lastActiveThreadId", id);
+            } catch (_) {}
+          }}
           onNew={createNewThread}
           onRename={(id) => {
             const title = prompt("Enter new title");
@@ -564,6 +585,40 @@ const Chat: React.FC = () => {
         onOpenChange={setIsFileManagerOpen}
         search={fileSearch}
         onSearch={setFileSearch}
+        files={(() => {
+          try {
+            const raw = localStorage.getItem("authProfile");
+            if (!raw) return [];
+            const profile = JSON.parse(raw);
+            const arr = profile?.saved_files || profile?.files || [];
+            if (!Array.isArray(arr)) return [];
+            return arr.map((f: any, idx: number) => ({
+              id: String(f._id || f.id || idx),
+              name: String(f.name || f.filename || f.originalName || "Unnamed"),
+              size: typeof f.size === "number" ? f.size : undefined,
+              createdAt: f.created_at || f.createdAt || undefined,
+            }));
+          } catch (_) {
+            return [];
+          }
+        })()}
+        totalSizeBytes={(() => {
+          try {
+            const raw = localStorage.getItem("authProfile");
+            if (!raw) return null;
+            const profile = JSON.parse(raw);
+            const arr = profile?.saved_files || profile?.files || [];
+            if (!Array.isArray(arr)) return null;
+            const total = arr.reduce(
+              (acc: number, f: any) =>
+                acc + (typeof f.size === "number" ? f.size : 0),
+              0
+            );
+            return total;
+          } catch (_) {
+            return null;
+          }
+        })()}
       />
       <PromptsDialog
         open={isPromptsOpen}
@@ -571,6 +626,13 @@ const Chat: React.FC = () => {
         search={promptSearch}
         onSearch={setPromptSearch}
         prompts={prompts}
+        savedCount={
+          stats && typeof stats.saved_prompts_count === "number"
+            ? stats.saved_prompts_count
+            : Array.isArray(authSavedPrompts)
+            ? authSavedPrompts.length
+            : null
+        }
         onSelect={(p) => setMessage(p.content)}
       />
       <SettingsDialog

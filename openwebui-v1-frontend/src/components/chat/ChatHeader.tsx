@@ -35,6 +35,7 @@ export const ChatHeader: React.FC<Props> = ({
   onOpenSettings,
 }) => {
   const { user, logout } = useAuth();
+  const { availableModels } = useAuth();
   const { toast } = useToast();
 
   return (
@@ -45,6 +46,7 @@ export const ChatHeader: React.FC<Props> = ({
           <ModelSelector
             selected={selectedModel}
             onSelect={onSelectModel}
+            availableModels={availableModels}
             compareMode={compareMode}
             onToggleCompare={onToggleCompare}
           />

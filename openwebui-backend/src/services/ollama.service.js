@@ -87,15 +87,53 @@ export function runModelStream(modelId, prompt, onChunk, onClose, onError) {
 
     // Ollama command (no --stream in v0.11.11)
     const args = ["run", modelId];
-    const proc = spawn("ollama", args);
+    const proc = spawn("ollama", args, { stdio: ["pipe", "pipe", "pipe"] });
 
     // Send prompt via stdin
     proc.stdin.setEncoding("utf-8");
     proc.stdin.write(prompt);
     proc.stdin.end();
 
+    // Timeouts: idle timeout (no output) and total runtime
+    const IDLE_TIMEOUT_MS = process.env.OLLAMA_IDLE_TIMEOUT_MS
+      ? parseInt(process.env.OLLAMA_IDLE_TIMEOUT_MS)
+      : 30_000; // 30s default idle
+    const TOTAL_TIMEOUT_MS = process.env.OLLAMA_TOTAL_TIMEOUT_MS
+      ? parseInt(process.env.OLLAMA_TOTAL_TIMEOUT_MS)
+      : 5 * 60_000; // 5 minutes default
+
+    let idleTimer = null;
+    let totalTimer = null;
+
+    function resetIdle() {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        const err = new Error("Model run idle timeout");
+        try {
+          proc.kill();
+        } catch (e) {}
+        onError(err);
+      }, IDLE_TIMEOUT_MS);
+    }
+
+    function startTotalTimer() {
+      if (totalTimer) clearTimeout(totalTimer);
+      totalTimer = setTimeout(() => {
+        const err = new Error("Model run total timeout");
+        try {
+          proc.kill();
+        } catch (e) {}
+        onError(err);
+      }, TOTAL_TIMEOUT_MS);
+    }
+
+    // Start timers
+    resetIdle();
+    startTotalTimer();
+
     // Handle stdout (stream chunks)
     proc.stdout.on("data", (chunk) => {
+      resetIdle();
       const clean = stripAnsiCodes(chunk.toString());
       if (clean.trim()) {
         onChunk(clean);
@@ -104,14 +142,25 @@ export function runModelStream(modelId, prompt, onChunk, onClose, onError) {
 
     // Handle stderr (warnings/errors)
     proc.stderr.on("data", (chunk) => {
+      resetIdle();
       const clean = stripAnsiCodes(chunk.toString());
       if (clean.trim()) {
+        // treat stderr as chunks too, but tag if needed
         onChunk(clean);
       }
     });
 
-    proc.on("close", (code) => onClose(code));
-    proc.on("error", (err) => onError(err));
+    proc.on("close", (code) => {
+      if (idleTimer) clearTimeout(idleTimer);
+      if (totalTimer) clearTimeout(totalTimer);
+      onClose(code);
+    });
+
+    proc.on("error", (err) => {
+      if (idleTimer) clearTimeout(idleTimer);
+      if (totalTimer) clearTimeout(totalTimer);
+      onError(err);
+    });
 
     return proc;
   } catch (err) {

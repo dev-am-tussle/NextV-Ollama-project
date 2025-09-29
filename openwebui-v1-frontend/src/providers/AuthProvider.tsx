@@ -8,6 +8,8 @@ type User = any;
 interface AuthContextType {
   user: User | null;
   stats: any | null;
+  savedPrompts?: any[] | null;
+  availableModels?: string[] | null;
   isAuthenticated: boolean;
   loading: boolean;
   login: (payload: { email: string; password: string }) => Promise<any>;
@@ -27,17 +29,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [user, setUser] = useState<User | null>(null);
   const [stats, setStats] = useState<any | null>(null);
+  const [availableModels, setAvailableModels] = useState<string[] | null>(null);
+  const [savedPrompts, setSavedPrompts] = useState<any[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   const isAuthenticated = !!user;
 
   const refreshUser = async () => {
     try {
-      const me = await authService.me();
-      console.log("[AuthProvider] /auth/me response:", me);
-      // backend returns { user, stats }
-      setUser(me?.user || null);
-      setStats(me?.stats || null);
+      // Prefer the login response persisted in localStorage to avoid extra API calls.
+      const raw = localStorage.getItem("authProfile");
+      if (raw) {
+        const me = JSON.parse(raw);
+        setUser(me?.user || null);
+        setStats(me?.meta || me?.stats || null);
+        // saved prompts may appear at the root of the authProfile or inside settings
+        const settings = me?.settings || me?.user?.settings || null;
+        setSavedPrompts(me?.saved_prompts || settings?.saved_prompts || null);
+        setAvailableModels(settings?.avail_models || null);
+      } else {
+        // no local profile available => treat as unauthenticated
+        setUser(null);
+      }
     } catch (e) {
       setUser(null);
     } finally {
@@ -49,7 +62,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const token = authService.getAuthToken();
     if (token) {
       // if user lands on home '/', fetch root '/' which may include profile
-      // otherwise fall back to /auth/me inside refreshUser
       const locationPath = window.location.pathname;
       if (locationPath === "/" || locationPath === "/home") {
         (async () => {
@@ -70,7 +82,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           } catch (err) {
             console.warn("[AuthProvider] root / fetch failed:", err);
           }
-          // fallback
+          // fallback to persisted login profile
           await refreshUser();
         })();
       } else {
@@ -84,16 +96,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const login = async (payload: { email: string; password: string }) => {
     const res = await authService.login(payload);
     console.log("[AuthProvider] login response:", res);
-    // If the login endpoint returns full user + settings/meta, use it directly
-    if (res?.user) {
-      setUser((res as any).user);
-      // prefer `settings` or `meta` for stats (not declared in AuthResponse)
-      setStats((res as any).settings || (res as any).meta || null);
-      setLoading(false);
-    } else {
-      // fallback to calling /auth/me
-      await refreshUser();
+    // After login, prefer the persisted authProfile for user/settings. This
+    // avoids races where protected routes navigate before user state is set.
+    try {
+      const raw = localStorage.getItem("authProfile");
+      const me = raw ? JSON.parse(raw) : res;
+      setUser(me?.user || null);
+      setStats(me?.meta || me?.settings || null);
+      // saved prompts may be returned at top-level or under settings
+      setSavedPrompts(
+        me?.saved_prompts ||
+          me?.settings?.saved_prompts ||
+          me?.user?.settings?.saved_prompts ||
+          null
+      );
+      const settings = me?.settings || me?.user?.settings || null;
+      setAvailableModels(settings?.avail_models || null);
+    } catch (_) {
+      // fall back to any user object returned directly
+      setUser(res?.user || null);
     }
+    setLoading(false);
+    try {
+      localStorage.setItem("authJustLoggedIn", "1");
+    } catch (_) {}
     return res;
   };
 
@@ -123,6 +149,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       value={{
         user,
         stats,
+        savedPrompts,
+        availableModels,
         isAuthenticated,
         loading,
         login,

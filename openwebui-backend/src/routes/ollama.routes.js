@@ -1,6 +1,8 @@
 import express from "express";
 import { streamGenerate } from "../controllers/ollama.controllers.js";
 import ratelimit from "express-rate-limit";
+import { requireAuth } from "../middleware/auth.js";
+
 const router = express.Router();
 
 const limiter = ratelimit({
@@ -9,17 +11,7 @@ const limiter = ratelimit({
   message: { error: "Too many requests, please try again later." },
 });
 
-// Dummy auth middleware
-function authMiddleware(req, res, next) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    return res.status(401).json({ error: "Unauthorized. Token required." });
-  }
-
-  next();
-}
-
 // POST /api/models/stream-generate
-router.post("/generate/stream", authMiddleware, limiter, streamGenerate);
+router.post("/generate/stream", requireAuth, limiter, streamGenerate);
 
 export default router;

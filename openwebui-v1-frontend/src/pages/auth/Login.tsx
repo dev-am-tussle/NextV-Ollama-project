@@ -53,6 +53,23 @@ const Login = () => {
     setIsLoading(true);
     try {
       await login({ email, password });
+      // wait briefly for authProfile to be persisted by auth.login and for
+      // AuthProvider to pick it up. This avoids a race where ProtectedRoute
+      // redirects back to /auth/login before user state is set.
+      const waitForProfile = async (timeoutMs = 2000) => {
+        const start = Date.now();
+        while (Date.now() - start < timeoutMs) {
+          const raw = localStorage.getItem("authProfile");
+          const token =
+            localStorage.getItem("authToken") || localStorage.getItem("token");
+          if (raw && token) return true;
+          // small delay
+          // eslint-disable-next-line no-await-in-loop
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        return false;
+      };
+      await waitForProfile(2000);
       navigate("/");
       toast({
         title: "Welcome back!",

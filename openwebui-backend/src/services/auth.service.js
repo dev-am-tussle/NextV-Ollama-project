@@ -208,15 +208,25 @@ export async function logoutUser() {
  */
 export async function getUserProfile(userId) {
   if (!userId) throw new Error("Missing user id");
-  const user = await User.findById(userId)
-    .select("_id name email created_at")
-    .lean();
+  // fetch the user record including settings reference so we can return settings
+  const user = await User.findById(userId).lean();
   if (!user) throw new Error("User not found");
 
   const convCount = await Conversation.countDocuments({ user_id: userId });
   const lastConv = await Conversation.findOne({ user_id: userId })
     .sort({ updated_at: -1 })
     .lean();
+
+  // fetch settings if linked
+  let settings = null;
+  try {
+    if (user.settings_id) {
+      settings = await UserSettings.findById(user.settings_id).lean();
+    }
+  } catch (e) {
+    // non-fatal: we'll just return null settings
+    settings = null;
+  }
 
   return {
     user: {
@@ -225,6 +235,7 @@ export async function getUserProfile(userId) {
       email: user.email,
       created_at: user.created_at,
     },
+    settings,
     stats: {
       conversations: convCount,
       last_conversation_at: lastConv ? lastConv.updated_at : null,

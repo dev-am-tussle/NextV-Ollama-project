@@ -12,7 +12,6 @@ import savedPromptsRoutes from "./routes/savedprompts.routes.js";
 import filesRoutes from "./routes/files.routes.js";
 import oauthRoutes from "./routes/oauth.routes.js";
 import jwt from "jsonwebtoken";
-import { getUserProfile } from "./services/auth.service.js";
 import { connectDB, closeDB } from "./config/ollama.db.js"; // DB helpers import
 
 dotenv.config();
@@ -22,7 +21,6 @@ const app = express();
 // security + logging
 app.use(helmet());
 app.use(morgan("dev"));
-
 
 // CORS
 const FRONTEND = process.env.FRONTEND_ORIGIN || "http://localhost:8080";
@@ -79,25 +77,7 @@ app.get("/", async (req, res) => {
   // If an Authorization Bearer token is provided, try to decode it and
   // include the user's profile (from getUserProfile) in the response so
   // frontend can fetch user details from the root route without calling /auth/me
-  try {
-    const header = req.headers.authorization || "";
-    const token = header.startsWith("Bearer ") ? header.slice(7) : null;
-    if (token && process.env.JWT_SECRET) {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const userId = decoded && decoded.sub ? decoded.sub : null;
-      if (userId) {
-        const profile = await getUserProfile(userId);
-        return res.json({ ...base, profile });
-      }
-    }
-  } catch (err) {
-    // don't fail the root route on token errors; just return the base message
-    console.warn(
-      "/ root: failed to decode token or fetch profile:",
-      err.message || err
-    );
-  }
-
+  // Keep root lightweight. Frontend should not rely on root for fetching profile.
   return res.json(base);
 });
 

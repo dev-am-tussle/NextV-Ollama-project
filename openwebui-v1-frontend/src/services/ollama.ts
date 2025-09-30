@@ -7,6 +7,7 @@ export type StreamCallbacks = {
 export type StreamOptions = {
   prompt: string;
   modelId?: string;
+  conversationId?: string;
   signal?: AbortSignal;
 };
 
@@ -16,7 +17,7 @@ export async function streamGenerate(
   opts: StreamOptions,
   callbacks: StreamCallbacks = {}
 ): Promise<void> {
-  const { prompt: content, modelId: model, signal } = opts;
+  const { prompt: content, modelId: model, conversationId, signal } = opts;
   const { onChunk, onClose, onError } = callbacks;
 
   const url = `${API_BASE.replace(/\/$/, "")}/api/v1/models/generate/stream`;
@@ -24,6 +25,12 @@ export async function streamGenerate(
     localStorage.getItem("authToken") || localStorage.getItem("token");
 
   try {
+    const requestBody = {
+      modelId: model,
+      prompt: content,
+      ...(conversationId && { conversationId }),
+    };
+
     const res = await fetch(url, {
       method: "POST",
       headers: {
@@ -31,7 +38,7 @@ export async function streamGenerate(
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       credentials: "include",
-      body: JSON.stringify({ modelId: model, prompt: content }),
+      body: JSON.stringify(requestBody),
       signal,
     });
 

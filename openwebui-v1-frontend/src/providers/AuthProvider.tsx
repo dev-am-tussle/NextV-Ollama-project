@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import apiFetch from "@/lib/api";
 import * as authService from "@/services/auth";
+import { getUserSavedPrompts } from "@/services/savedPrompts";
 
 type User = any;
 
@@ -20,6 +21,7 @@ interface AuthContextType {
   }) => Promise<any>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  refreshSavedPrompts: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -43,16 +45,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         const me = JSON.parse(raw);
         setUser(me?.user || null);
         setStats(me?.meta || me?.stats || null);
-        // saved prompts may appear at the root of the authProfile or inside settings
         const settings = me?.settings || me?.user?.settings || null;
-        setSavedPrompts(me?.saved_prompts || settings?.saved_prompts || null);
         setAvailableModels(settings?.avail_models || null);
+
+        // Load saved prompts from API if user exists
+        if (me?.user?.id) {
+          try {
+            const savedPromptsFromAPI = await getUserSavedPrompts(me.user.id);
+            setSavedPrompts(savedPromptsFromAPI);
+          } catch (error) {
+            console.error("Failed to load saved prompts:", error);
+            // fallback to cached prompts
+            setSavedPrompts(
+              me?.saved_prompts || settings?.saved_prompts || null
+            );
+          }
+        } else {
+          setSavedPrompts(null);
+        }
       } else {
         // no local profile available => treat as unauthenticated
         setUser(null);
+        setSavedPrompts(null);
       }
     } catch (e) {
       setUser(null);
+      setSavedPrompts(null);
     } finally {
       setLoading(false);
     }
@@ -76,6 +94,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             if (body?.profile?.user) {
               setUser(body.profile.user);
               setStats(body.profile.stats || null);
+
+              // Load saved prompts for authenticated user
+              if (body.profile.user?.id) {
+                try {
+                  const savedPromptsFromAPI = await getUserSavedPrompts(
+                    body.profile.user.id
+                  );
+                  setSavedPrompts(savedPromptsFromAPI);
+                } catch (error) {
+                  console.error("Failed to load saved prompts on init:", error);
+                }
+              }
+
               setLoading(false);
               return;
             }
@@ -103,15 +134,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       const me = raw ? JSON.parse(raw) : res;
       setUser(me?.user || null);
       setStats(me?.meta || me?.settings || null);
-      // saved prompts may be returned at top-level or under settings
-      setSavedPrompts(
-        me?.saved_prompts ||
-          me?.settings?.saved_prompts ||
-          me?.user?.settings?.saved_prompts ||
-          null
-      );
+
       const settings = me?.settings || me?.user?.settings || null;
       setAvailableModels(settings?.avail_models || null);
+
+      // Load saved prompts from API after login
+      if (me?.user?.id) {
+        try {
+          const savedPromptsFromAPI = await getUserSavedPrompts(me.user.id);
+          setSavedPrompts(savedPromptsFromAPI);
+        } catch (error) {
+          console.error("Failed to load saved prompts after login:", error);
+          // fallback to cached prompts
+          setSavedPrompts(
+            me?.saved_prompts ||
+              me?.settings?.saved_prompts ||
+              me?.user?.settings?.saved_prompts ||
+              null
+          );
+        }
+      }
     } catch (_) {
       // fall back to any user object returned directly
       setUser(res?.user || null);
@@ -144,6 +186,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  const refreshSavedPrompts = async () => {
+    if (!user?.id) return;
+    try {
+      const prompts = await getUserSavedPrompts(user.id);
+      setSavedPrompts(prompts);
+    } catch (error) {
+      console.error("Failed to refresh saved prompts:", error);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -157,6 +209,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         register,
         logout,
         refreshUser,
+        refreshSavedPrompts,
       }}
     >
       {children}

@@ -36,3 +36,9 @@ export async function postMessage(
     body: { content, model } as any,
   });
 }
+
+export async function deleteConversation(conversationId: string) {
+  return apiFetch(`conversations/${conversationId}`, {
+    method: "DELETE",
+  });
+}

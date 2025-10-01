@@ -14,6 +14,7 @@ export type ChatMessage = {
   error?: string; // error message if status=error
   saved?: boolean; // user saved as prompt
   feedback?: "up" | "down"; // like/dislike
+  modelName?: string; // model name that generated this message
 };
 
 export interface ChatThread {
@@ -113,6 +114,7 @@ export function useChatMessaging({
         isSkeleton: true,
         isStreaming: true,
         status: "streaming",
+        modelName: selectedModel,
       };
       setThreads((prev) =>
         prev.map((t) =>
@@ -199,6 +201,7 @@ export function useChatMessaging({
             {
               prompt: text,
               modelId: backendModelId || "gemma:2b",
+              modelName: selectedModel,
               conversationId: streamConversationId,
               signal: abortRef.current.signal,
             },
@@ -219,6 +222,23 @@ export function useChatMessaging({
                                   isStreaming: true,
                                   status: "streaming",
                                 }
+                              : m
+                          ),
+                        }
+                      : t
+                  )
+                );
+              },
+              onMessageId: (backendMessageId) => {
+                // Replace temporary assistantId with backend id for persistence mapping
+                setThreads((prev) =>
+                  prev.map((t) =>
+                    t.id === workingThreadId
+                      ? {
+                          ...t,
+                          messages: t.messages.map((m) =>
+                            m.id === assistantId && !/^[a-f\d]{24}$/i.test(m.id)
+                              ? { ...m, id: backendMessageId }
                               : m
                           ),
                         }
@@ -253,23 +273,31 @@ export function useChatMessaging({
                   )
                 );
               },
-              onClose: () => {
+              onClose: (final) => {
                 setStatus("finalizing");
-                // Mark message as not streaming
+                const finalText = final?.text; // refined full text from backend if provided
+                const backendMessageId = final?.messageId;
+                const backendModelName = final?.modelName;
                 setThreads((prev) =>
                   prev.map((t) =>
                     t.id === workingThreadId
                       ? {
                           ...t,
-                          messages: t.messages.map((m) =>
-                            m.id === assistantId
-                              ? {
-                                  ...m,
-                                  isStreaming: false,
-                                  status: "finalizing",
-                                }
-                              : m
-                          ),
+                          messages: t.messages.map((m) => {
+                            const isTarget =
+                              m.id === assistantId ||
+                              (backendMessageId && m.id === backendMessageId);
+                            if (!isTarget) return m;
+                            return {
+                              ...m,
+                              id: backendMessageId || m.id,
+                              content: finalText && finalText.length > m.content.length ? finalText : m.content,
+                              isStreaming: false,
+                              status: "done",
+                              isSkeleton: false,
+                              modelName: backendModelName || m.modelName,
+                            };
+                          }),
                           updatedAt: new Date(),
                         }
                       : t
@@ -278,56 +306,6 @@ export function useChatMessaging({
               },
             }
           );
-
-          // Persist assistant final content using latest state snapshot
-          try {
-            let finalContent = "";
-            setThreads((prev) => {
-              const thread = prev.find((t) => t.id === workingThreadId);
-              const msg = thread?.messages?.find((m) => m.id === assistantId);
-              finalContent = msg?.content || "";
-              return prev;
-            });
-            if (workingThreadId) {
-              await postMessage(workingThreadId, finalContent, backendModelId);
-            }
-            // Mark done
-            setThreads((prev) =>
-              prev.map((t) =>
-                t.id === workingThreadId
-                  ? {
-                      ...t,
-                      messages: t.messages.map((m) =>
-                        m.id === assistantId ? { ...m, status: "done" } : m
-                      ),
-                    }
-                  : t
-              )
-            );
-          } catch (err) {
-            toast({
-              title: "Persist error",
-              description: (err as Error)?.message || "Failed to persist",
-            });
-            setThreads((prev) =>
-              prev.map((t) =>
-                t.id === workingThreadId
-                  ? {
-                      ...t,
-                      messages: t.messages.map((m) =>
-                        m.id === assistantId
-                          ? {
-                              ...m,
-                              status: "error",
-                              error: (err as any)?.message,
-                            }
-                          : m
-                      ),
-                    }
-                  : t
-              )
-            );
-          }
         } else {
           // Non-streaming path
           setStatus("finalizing");

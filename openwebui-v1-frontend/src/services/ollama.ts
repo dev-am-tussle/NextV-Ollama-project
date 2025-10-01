@@ -1,12 +1,14 @@
 export type StreamCallbacks = {
   onChunk?: (text: string) => void;
-  onClose?: () => void;
+  onClose?: (final?: { text?: string; messageId?: string; modelName?: string }) => void;
   onError?: (err: any) => void;
+  onMessageId?: (id: string) => void; // new: backend message id early
 };
 
 export type StreamOptions = {
   prompt: string;
   modelId?: string;
+  modelName?: string;
   conversationId?: string;
   signal?: AbortSignal;
 };
@@ -17,8 +19,8 @@ export async function streamGenerate(
   opts: StreamOptions,
   callbacks: StreamCallbacks = {}
 ): Promise<void> {
-  const { prompt: content, modelId: model, conversationId, signal } = opts;
-  const { onChunk, onClose, onError } = callbacks;
+  const { prompt: content, modelId: model, modelName, conversationId, signal } = opts;
+  const { onChunk, onClose, onError, onMessageId } = callbacks;
 
   const url = `${API_BASE.replace(/\/$/, "")}/api/v1/models/generate/stream`;
   const token =
@@ -27,6 +29,7 @@ export async function streamGenerate(
   try {
     const requestBody = {
       modelId: model,
+      modelName,
       prompt: content,
       ...(conversationId && { conversationId }),
     };
@@ -85,6 +88,11 @@ export async function streamGenerate(
             // if payload has { chunk }
             if (obj && typeof obj.chunk === "string") {
               onChunk?.(obj.chunk);
+            } else if (event === "message_id" && obj.message_id) {
+              onMessageId?.(obj.message_id);
+            } else if (event === "done") {
+              // final event includes full text
+              onClose?.({ text: obj.text, messageId: obj.message_id, modelName: obj.model_name });
             } else {
               // fallback: stringify entire obj
               onChunk?.(JSON.stringify(obj));
@@ -94,7 +102,7 @@ export async function streamGenerate(
             onChunk?.(dataStr);
           }
         }
-        if (event === "done") onClose?.();
+        if (event === "done" && !dataLines.length) onClose?.();
         if (event === "error") onError?.(new Error("Stream error from server"));
       }
     }

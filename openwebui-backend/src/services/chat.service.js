@@ -49,11 +49,12 @@ export async function addUserMessage(conversationId, text, userId) {
   });
 }
 
-export async function createModelMessage(conversationId, modelName) {
+export async function createModelMessage(conversationId, modelName, modelDisplayName) {
   return Message.create({
     conversation_id: conversationId,
     sender: "model",
     model: modelName || null,
+    model_name: modelDisplayName || modelName || null,
     text: "",
     chunks: [],
     status: "streaming",

@@ -11,7 +11,7 @@ function sseSend(res, event, payload) {
 
 export async function streamGenerate(req, res) {
   try {
-    const { modelId, prompt } = req.body || {};
+    const { modelId, prompt, modelName } = req.body || {};
 
     if (typeof modelId !== "string" || typeof prompt !== "string") {
       return res
@@ -70,7 +70,7 @@ export async function streamGenerate(req, res) {
     
 
     // Create assistant placeholder message and immediately send its id to client
-    const assistantMsg = await chatService.createModelMessage(convoId);
+    const assistantMsg = await chatService.createModelMessage(convoId, modelId, modelName);
     sseSend(res, "message_id", { message_id: assistantMsg._id.toString() });
 
     // Helper to send chunk event
@@ -98,9 +98,15 @@ export async function streamGenerate(req, res) {
         finished = true;
         try {
           // finalize: collapse chunks into text and mark done
-          await chatService.finalizeModelMessage(assistantMsg._id);
+          const finalMsg = await chatService.finalizeModelMessage(assistantMsg._id);
           await chatService.finalizeConversationTouch(convoId);
-          sseSend(res, "done", {});
+          sseSend(res, "done", {
+            message_id: assistantMsg._id.toString(),
+            text: finalMsg?.text || null,
+            conversation_id: convoId.toString(),
+            status: "done",
+            model_name: finalMsg?.model_name || modelName || null,
+          });
         } catch (e) {
           console.error("Error finalizing model message:", e);
         }

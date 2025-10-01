@@ -37,6 +37,7 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
+  modelName?: string;
 }
 
 interface ChatThread {
@@ -228,6 +229,7 @@ const Chat: React.FC = () => {
             timestamp: obj?.created_at
               ? new Date(String(obj.created_at))
               : new Date(),
+            modelName: obj?.model_name ? String(obj.model_name) : undefined,
           } as Message;
         });
         setThreads((prev) =>
@@ -618,6 +620,7 @@ const Chat: React.FC = () => {
                     text: m.content,
                     sender: m.role === "user" ? "user" : "assistant",
                     createdAt: m.timestamp,
+                    modelName: m.modelName,
                     // flags may already exist on underlying message objects if they were added by hook
                     // (Type assertion defensive merge)
                     ...((m as any).isSkeleton

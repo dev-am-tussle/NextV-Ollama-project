@@ -98,7 +98,7 @@ router.post("/:conversationId/messages", async (req, res) => {
     const userMsg = await addUserMessage(conversationId, content);
 
     // Create model placeholder
-    const modelMsg = await createModelMessage(conversationId);
+    const modelMsg = await createModelMessage(conversationId, model, model);
 
     let collected = "";
     let errored = false;
@@ -163,6 +163,7 @@ router.post("/:conversationId/messages", async (req, res) => {
         text: collected,
         status: errored ? "error" : "done",
         error: errored ? collected || "Model stream error" : undefined,
+        model_name: model,
         duration_ms: durationMs,
       },
       conversation: { id: conv._id, updated_at: new Date() },

@@ -12,6 +12,7 @@ export interface Message {
   sender: "user" | "model";
   text: string;
   created_at?: string;
+  model_name?: string;
 }
 
 export async function listConversations(limit = 50) {

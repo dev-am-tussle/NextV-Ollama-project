@@ -23,6 +23,7 @@ export type ChatMessage = {
   isSkeleton?: boolean; // show placeholder skeleton instead of real content
   isStreaming?: boolean; // actively receiving stream chunks
   saved?: boolean; // whether this message is saved as prompt
+  modelName?: string; // model name that generated this message
 };
 
 interface Props {
@@ -174,7 +175,7 @@ export const MessagesPane: React.FC<Props> = ({
                 {/* Action Toolbar */}
                 {!m.isSkeleton && !isEditing && (
                   <div
-                    className={`mt-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150 text-muted-foreground flex-wrap ${
+                    className={`mt-2 flex items-center gap-1 transition-opacity duration-150 text-muted-foreground flex-wrap ${
                       isAssistant ? "justify-start" : "justify-end"
                     }`}
                     role="toolbar"
@@ -227,9 +228,14 @@ export const MessagesPane: React.FC<Props> = ({
                             }`}
                             title={fb === "down" ? "Undo dislike" : "Dislike"}
                             aria-label="Dislike"
-                          >
+                            >
                             <ThumbsDown className="h-4 w-4" />
                           </button>
+                        )}
+                        {m.modelName && (
+                          <span className="ml-2 inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30 select-none font-medium">
+                            {m.modelName}
+                          </span>
                         )}
                         {m.isStreaming && (
                           <span className="ml-2 inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-full bg-primary/10 text-primary animate-pulse select-none">

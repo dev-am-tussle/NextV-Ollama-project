@@ -16,8 +16,8 @@
     --popover: 0 0% 100%;
     --popover-foreground: 210 11% 15%;
 
-    /* Primary: Teal 600 (#0d9488) */
-    --primary: 180 84% 31%;
+    /* Primary: Teal 600 (#0d9488) - Will be overridden by branding settings */
+    --primary: 97 218 251;
     --primary-foreground: 0 0% 100%;
 
     /* Muted: Gray 200 (#e5e7eb) */
@@ -27,8 +27,8 @@
     --muted: 220 14% 96%;
     --muted-foreground: 215 16% 47%;
 
-    /* Accent: Amber 500 (#f59e0b) */
-    --accent: 43 96% 51%;
+    /* Accent: Amber 500 (#f59e0b) - Will use primary for better consistency */
+    --accent: var(--primary);
     --accent-foreground: 210 11% 15%;
 
     --destructive: 0 84% 60%;
@@ -36,9 +36,16 @@
 
     --border: 220 13% 91%;
     --input: 220 13% 91%;
-    --ring: 180 84% 31%;
+    --ring: var(--primary);
 
     --radius: 0.5rem;
+
+    /* Dynamic branding variables - will be set by JavaScript */
+    --btn-primary-bg: rgb(97, 218, 251);
+    --btn-primary-text: #ffffff;
+    --btn-primary-text-rgb: 255 255 255;
+    --color-primary: #61dafbaa;
+    --logo-color: #61dafbaa;
 
     /* Sidebar */
     --sidebar-background: 0 0% 98%;
@@ -49,6 +56,11 @@
     --sidebar-accent-foreground: 210 11% 15%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 180 84% 31%;
+
+    /* Scrollbar variables for light theme */
+    --scrollbar-track: 220 14% 96%;
+    --scrollbar-thumb: 220 13% 85%;
+    --scrollbar-thumb-hover: 220 13% 75%;
   }
 
   .dark {
@@ -89,6 +101,11 @@
     --sidebar-accent-foreground: 0 0% 98%;
     --sidebar-border: 215 20% 25%;
     --sidebar-ring: 180 84% 31%;
+
+    /* Scrollbar variables for dark theme */
+    --scrollbar-track: 210 11% 10%;
+    --scrollbar-thumb: 215 20% 25%;
+    --scrollbar-thumb-hover: 215 20% 35%;
   }
 }
 
@@ -181,6 +198,128 @@
   }
 }
 
+/* Custom Scrollbar Styles - ChatGPT inspired */
+/* Webkit browsers (Chrome, Safari, Edge) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--scrollbar-track));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--scrollbar-thumb));
+  border-radius: 4px;
+  border: 1px solid hsl(var(--scrollbar-track));
+  transition: all 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--scrollbar-thumb-hover));
+}
+
+::-webkit-scrollbar-corner {
+  background: hsl(var(--scrollbar-track));
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--scrollbar-thumb)) hsl(var(--scrollbar-track));
+}
+
+/* Custom scrollbar for specific components */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--scrollbar-thumb)) hsl(var(--scrollbar-track));
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: hsl(var(--scrollbar-track));
+  border-radius: 4px;
+  margin: 2px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(var(--scrollbar-thumb));
+  border-radius: 4px;
+  border: 1px solid hsl(var(--scrollbar-track));
+  transition: all 0.2s ease;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--scrollbar-thumb-hover));
+}
+
+/* Thin scrollbar variant for dialogs */
+.thin-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.thin-scrollbar::-webkit-scrollbar-track {
+  background: hsl(var(--scrollbar-track));
+  border-radius: 3px;
+  margin: 1px;
+}
+
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(var(--scrollbar-thumb));
+  border-radius: 3px;
+  transition: all 0.2s ease;
+}
+
+.thin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--scrollbar-thumb-hover));
+}
+
+@layer utilities {
+  /* Dynamic branding utilities */
+  .btn-primary {
+    background-color: var(--btn-primary-bg);
+    color: var(--btn-primary-text);
+  }
+  
+  .btn-primary:hover {
+    background-color: var(--btn-primary-bg);
+    opacity: 0.9;
+  }
+  
+  .text-brand {
+    color: var(--logo-color);
+  }
+  
+  .border-brand {
+    border-color: var(--color-primary);
+  }
+  
+  .bg-brand {
+    background-color: var(--btn-primary-bg);
+    color: var(--btn-primary-text);
+  }
+  
+  /* Override default button styles for branded buttons */
+  .btn-brand {
+    background-color: var(--btn-primary-bg) !important;
+    color: var(--btn-primary-text) !important;
+    border: none;
+  }
+  
+  .btn-brand:hover {
+    background-color: var(--btn-primary-bg) !important;
+    color: var(--btn-primary-text) !important;
+    opacity: 0.9;
+  }
+}
+
 @layer base {
   * {
     @apply border-border;
@@ -189,4 +328,8 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+pre{
+  background: hsl(180 84% 31%);
 }

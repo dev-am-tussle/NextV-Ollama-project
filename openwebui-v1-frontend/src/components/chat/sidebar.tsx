@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { getBrandingSettings } from "@/services/adminSettings";
 import {
   Sidebar,
   SidebarContent,
@@ -74,17 +75,33 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   onSignOut,
   Logo,
 }) => {
+  const [brandingSettings, setBrandingSettings] = useState({ 
+    logoName: "TussleAI", 
+    titleName: "Tussle - AI", 
+    primaryColor: "#61dafbaa",
+    buttonTextColor: "#ffffff"
+  });
+
+  useEffect(() => {
+    const settings = getBrandingSettings();
+    setBrandingSettings(settings);
+  }, []);
+
   return (
     <Sidebar className="border-r">
       <SidebarContent>
         <div className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 font-semibold text-sm">
-              {Logo || <span className="text-primary">Pointer</span>}
+              {Logo || (
+                <span style={{ color: brandingSettings.primaryColor }}>
+                  {brandingSettings.logoName}
+                </span>
+              )}
             </div>
             <SidebarTrigger className="md:hidden" />
           </div>
-          <Button onClick={onNew} className="w-full justify-start" size="sm">
+          <Button onClick={onNew} className="w-full justify-start btn-brand" size="sm">
             <Plus className="mr-2 h-4 w-4" /> New Chat
           </Button>
           <div className="relative">
@@ -99,7 +116,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
         </div>
         <SidebarGroup>
           <SidebarGroupLabel>Chat History</SidebarGroupLabel>
-          <SidebarGroupContent>
+          <SidebarGroupContent className="custom-scrollbar">
             <SidebarMenu>
               {threads.map((t) => (
                 <SidebarMenuItem key={t.id} className="group">

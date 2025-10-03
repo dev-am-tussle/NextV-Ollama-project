@@ -129,7 +129,7 @@ export const PromptsDialog: React.FC<PromptsDialogProps> = ({
             />
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           </div>
-          <div className="space-y-2 max-h-60 overflow-auto pr-1">
+          <div className="space-y-2 max-h-60 overflow-auto pr-1 thin-scrollbar">
             {prompts.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-10">
                 No saved prompts yet.

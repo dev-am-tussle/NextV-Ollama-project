@@ -3,6 +3,7 @@ import { GitCompare } from "lucide-react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { useAuth } from "@/providers/AuthProvider";
 import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 import {
   listConversations,
   createConversation,
@@ -25,6 +26,7 @@ import { ChatSidebar } from "@/components/chat/sidebar";
 import { FileManagerDialog } from "@/components/chat/file-manager-dialog";
 import { PromptsDialog, PromptItem } from "@/components/chat/prompts-dialog";
 import { SettingsDialog } from "@/components/chat/settings-dialog";
+import { PreferencesDialog } from "@/components/chat/preferences-dialog";
 import { ChatHeader } from "@/components/chat/ChatHeader";
 import { MessagesPane } from "@/components/chat/MessagesPane";
 import { Composer } from "@/components/chat/Composer";
@@ -70,6 +72,7 @@ const Chat: React.FC = () => {
     refreshSavedPrompts,
   } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const [message, setMessage] = useState("");
   // isStreaming managed inside useChatMessaging
@@ -82,6 +85,7 @@ const Chat: React.FC = () => {
   const [isFileManagerOpen, setIsFileManagerOpen] = useState(false);
   const [isPromptsOpen, setIsPromptsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
   const [fileSearch, setFileSearch] = useState("");
   const [promptSearch, setPromptSearch] = useState("");
   const [compactMode, setCompactMode] = useState(false);
@@ -557,12 +561,13 @@ const Chat: React.FC = () => {
             onToggleCompare={() => setCompareMode((c) => !c)}
             onShare={shareCurrentChat}
             onOpenSettings={openSettings}
+            onOpenPreferences={() => setIsPreferencesOpen(true)}
           />
 
           {/* Scrollable messages region only */}
           <div
             ref={scrollRef}
-            className="flex-1 min-h-0 overflow-y-auto p-6 relative"
+            className="flex-1 min-h-0 overflow-y-auto p-6 relative custom-scrollbar"
           >
             {compareMode && (
               <div className="mb-4 p-3 text-xs rounded-md border bg-muted/30 flex items-center gap-2">
@@ -722,6 +727,10 @@ const Chat: React.FC = () => {
         onToggleCompact={() => setCompactMode((c) => !c)}
         compareMode={compareMode}
         onToggleCompare={() => setCompareMode((c) => !c)}
+      />
+      <PreferencesDialog
+        open={isPreferencesOpen}
+        onOpenChange={setIsPreferencesOpen}
       />
     </SidebarProvider>
   );

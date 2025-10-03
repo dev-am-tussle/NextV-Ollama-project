@@ -87,7 +87,7 @@ export const FileManagerDialog: React.FC<FileManagerDialogProps> = ({
               <p className="text-xs">Try another term</p>
             </div>
           ) : (
-            <div className="space-y-2 max-h-72 overflow-auto pr-1">
+            <div className="space-y-2 max-h-72 overflow-auto pr-1 thin-scrollbar">
               {filtered.map((f) => (
                 <div
                   key={f.id}

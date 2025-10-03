@@ -3,7 +3,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { ModelSelector, ModelKey } from "./model-selector";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
-import { Share2, Star, HelpCircle, Sliders, LogOut } from "lucide-react";
+import { Share2, Star, HelpCircle, Sliders, LogOut, Settings2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/providers/AuthProvider";
 import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 
 interface Props {
   title?: string;
@@ -23,6 +24,7 @@ interface Props {
   onToggleCompare: () => void;
   onShare: () => void;
   onOpenSettings: () => void;
+  onOpenPreferences: () => void;
 }
 
 export const ChatHeader: React.FC<Props> = ({
@@ -33,10 +35,12 @@ export const ChatHeader: React.FC<Props> = ({
   onToggleCompare,
   onShare,
   onOpenSettings,
+  onOpenPreferences,
 }) => {
   const { user, logout } = useAuth();
   const { availableModels } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   return (
     <header className="border-b p-4 flex items-center justify-between">
@@ -57,14 +61,6 @@ export const ChatHeader: React.FC<Props> = ({
         <ThemeToggle />
         <Button variant="ghost" size="sm" onClick={onShare} title="Share chat">
           <Share2 className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onOpenSettings}
-          title="Settings"
-        >
-          <Sliders className="h-4 w-4" />
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -108,7 +104,15 @@ export const ChatHeader: React.FC<Props> = ({
                 onOpenSettings();
               }}
             >
-              <Sliders className="h-4 w-4" /> Personalize
+              <Sliders className="h-4 w-4" /> Settings
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="flex gap-2"
+              onClick={() => {
+                onOpenPreferences();
+              }}
+            >
+              <Settings2 className="h-4 w-4" /> Preferences
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem

@@ -10,6 +10,11 @@ export type ChatMessage = {
   timestamp: Date;
   isSkeleton?: boolean; // true while assistant placeholder skeleton is shown
   isStreaming?: boolean; // true while receiving stream tokens
+  status?: "streaming" | "finalizing" | "done" | "error"; // backend/runtime status for assistant
+  error?: string; // error message if status=error
+  saved?: boolean; // user saved as prompt
+  feedback?: "up" | "down"; // like/dislike
+  modelName?: string; // model name that generated this message
 };
 
 export interface ChatThread {
@@ -49,6 +54,10 @@ export function useChatMessaging({
   const [isStreaming, setIsStreaming] = useState(false);
   const [status, setStatus] = useState<ChatStatus>("idle");
   const abortRef = useRef<AbortController | null>(null);
+
+  // Mongo style ObjectId (24 hex chars) detector
+  const isBackendId = (id: string | null | undefined) =>
+    !!id && /^[a-f\d]{24}$/i.test(id);
 
   const sendMessage = useCallback(
     async (
@@ -104,6 +113,8 @@ export function useChatMessaging({
         timestamp: new Date(),
         isSkeleton: true,
         isStreaming: true,
+        status: "streaming",
+        modelName: selectedModel,
       };
       setThreads((prev) =>
         prev.map((t) =>
@@ -115,9 +126,18 @@ export function useChatMessaging({
 
       // Create backend conversation after user message appended (lazy) if needed
       let backendConversationId: string | null = null;
-      if (!workingThreadId || workingThreadId.startsWith("local-")) {
+      if (
+        !isBackendId(workingThreadId) ||
+        workingThreadId.startsWith("local-")
+      ) {
         try {
           setStatus("creating-conversation");
+          if (process.env.NODE_ENV !== "production") {
+            console.debug(
+              "[chat] creating conversation because id invalid or local",
+              workingThreadId
+            );
+          }
           const conv = await createConversation(text.slice(0, 50));
           backendConversationId = String(conv._id);
           const title = String(conv.title || text.slice(0, 50) || "New Chat");
@@ -147,6 +167,9 @@ export function useChatMessaging({
           setStatus("error");
           return;
         }
+      } else {
+        // Use existing backend conversation ID
+        backendConversationId = workingThreadId;
       }
 
       // After conversation exists, begin streaming (Gemma) or single-shot
@@ -160,10 +183,26 @@ export function useChatMessaging({
           const cleanChunk = (raw: string) =>
             raw.replace(/\u0000|\r/g, "").replace(/\s+$/g, " ");
 
+          // Use the correct conversation ID - if we have backend ID, use it, otherwise use working ID
+          const streamConversationId =
+            backendConversationId ||
+            (isBackendId(workingThreadId) ? workingThreadId : undefined);
+
+          if (process.env.NODE_ENV !== "production") {
+            console.debug(
+              "[chat] Streaming with conversationId:",
+              streamConversationId,
+              "workingThreadId:",
+              workingThreadId
+            );
+          }
+
           await streamGenerate(
             {
               prompt: text,
               modelId: backendModelId || "gemma:2b",
+              modelName: selectedModel,
+              conversationId: streamConversationId,
               signal: abortRef.current.signal,
             },
             {
@@ -181,7 +220,25 @@ export function useChatMessaging({
                                   content: m.content + cleaned,
                                   isSkeleton: false, // first real token arrives -> remove skeleton
                                   isStreaming: true,
+                                  status: "streaming",
                                 }
+                              : m
+                          ),
+                        }
+                      : t
+                  )
+                );
+              },
+              onMessageId: (backendMessageId) => {
+                // Replace temporary assistantId with backend id for persistence mapping
+                setThreads((prev) =>
+                  prev.map((t) =>
+                    t.id === workingThreadId
+                      ? {
+                          ...t,
+                          messages: t.messages.map((m) =>
+                            m.id === assistantId && !/^[a-f\d]{24}$/i.test(m.id)
+                              ? { ...m, id: backendMessageId }
                               : m
                           ),
                         }
@@ -196,10 +253,6 @@ export function useChatMessaging({
                   variant: "destructive",
                 });
                 setStatus("error");
-              },
-              onClose: () => {
-                setStatus("finalizing");
-                // Mark message as not streaming
                 setThreads((prev) =>
                   prev.map((t) =>
                     t.id === workingThreadId
@@ -207,9 +260,44 @@ export function useChatMessaging({
                           ...t,
                           messages: t.messages.map((m) =>
                             m.id === assistantId
-                              ? { ...m, isStreaming: false }
+                              ? {
+                                  ...m,
+                                  isStreaming: false,
+                                  status: "error",
+                                  error: String((err as any)?.message || err),
+                                }
                               : m
                           ),
+                        }
+                      : t
+                  )
+                );
+              },
+              onClose: (final) => {
+                setStatus("finalizing");
+                const finalText = final?.text; // refined full text from backend if provided
+                const backendMessageId = final?.messageId;
+                const backendModelName = final?.modelName;
+                setThreads((prev) =>
+                  prev.map((t) =>
+                    t.id === workingThreadId
+                      ? {
+                          ...t,
+                          messages: t.messages.map((m) => {
+                            const isTarget =
+                              m.id === assistantId ||
+                              (backendMessageId && m.id === backendMessageId);
+                            if (!isTarget) return m;
+                            return {
+                              ...m,
+                              id: backendMessageId || m.id,
+                              content: finalText && finalText.length > m.content.length ? finalText : m.content,
+                              isStreaming: false,
+                              status: "done",
+                              isSkeleton: false,
+                              modelName: backendModelName || m.modelName,
+                            };
+                          }),
                           updatedAt: new Date(),
                         }
                       : t
@@ -218,25 +306,6 @@ export function useChatMessaging({
               },
             }
           );
-
-          // Persist assistant final content using latest state snapshot
-          try {
-            let finalContent = "";
-            setThreads((prev) => {
-              const thread = prev.find((t) => t.id === workingThreadId);
-              const msg = thread?.messages?.find((m) => m.id === assistantId);
-              finalContent = msg?.content || "";
-              return prev;
-            });
-            if (workingThreadId) {
-              await postMessage(workingThreadId, finalContent, backendModelId);
-            }
-          } catch (err) {
-            toast({
-              title: "Persist error",
-              description: (err as Error)?.message || "Failed to persist",
-            });
-          }
         } else {
           // Non-streaming path
           setStatus("finalizing");
@@ -260,6 +329,7 @@ export function useChatMessaging({
                               content: assistantText,
                               isSkeleton: false,
                               isStreaming: false,
+                              status: "done",
                             }
                           : m
                       ),

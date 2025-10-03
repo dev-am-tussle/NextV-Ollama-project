@@ -19,6 +19,26 @@ export async function listConversations(userId, limit = 20) {
     .lean();
 }
 
+export async function deleteConversation(conversationId, userId) {
+  // First verify ownership
+  const conversation = await Conversation.findOne({
+    _id: conversationId,
+    user_id: userId,
+  });
+
+  if (!conversation) {
+    throw new Error("Conversation not found or access denied");
+  }
+
+  // Delete all messages associated with this conversation
+  await Message.deleteMany({ conversation_id: conversationId });
+
+  // Delete the conversation itself
+  await Conversation.deleteOne({ _id: conversationId, user_id: userId });
+
+  return { success: true, deletedId: conversationId };
+}
+
 export async function addUserMessage(conversationId, text, userId) {
   return Message.create({
     conversation_id: conversationId,
@@ -29,11 +49,12 @@ export async function addUserMessage(conversationId, text, userId) {
   });
 }
 
-export async function createModelMessage(conversationId, modelName) {
+export async function createModelMessage(conversationId, modelName, modelDisplayName) {
   return Message.create({
     conversation_id: conversationId,
     sender: "model",
     model: modelName || null,
+    model_name: modelDisplayName || modelName || null,
     text: "",
     chunks: [],
     status: "streaming",

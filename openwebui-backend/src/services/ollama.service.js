@@ -1,76 +1,14 @@
-// import { spawn } from "child_process";
-
-// // Whitelist of allowed models
-// const ALLOWED_MODELS = ["gemma:2b"];
-
-// /**
-//  *
-//  * @param {string} modelId
-//  * @param {string} prompt
-//  * @param {function} onChunk
-//  * @param {function} onClose
-//  * @param {function} onError
-//  */
-
-// export function runModelStream(modelId, prompt, onChunk, onClose, onError) {
-//   try {
-//     // validate modelId
-//     if (!ALLOWED_MODELS.includes(modelId)) {
-//       throw new Error(`Model ${modelId} is not allowed.`);
-//     }
-
-//     // validate prompt
-//     if (typeof prompt !== "string" || prompt.trim() === "") {
-//       throw new Error("Prompt must be a non-empty string.");
-//     }
-//     if (prompt.length > 1000) {
-//       throw new Error("Prompt is too long. Maximum 1000 characters.");
-//     }
-
-//     // Spawn the ollama process
-//     const args = ["run", modelId, "--stream"];
-//     const proc = spawn("ollama", args);
-
-//     proc.stdin.setEncoding("utf-8");
-//     proc.stdin.write(prompt);
-//     proc.stdin.end();
-
-//     // Data received from the ollama (stdout);
-//     proc.stdout.on("data", (chunk) => {
-//       onChunk(chunk.toString());
-//     });
-
-//     proc.stderr.on("data", (chunk) => {
-//       onChunk(chunk.toString());
-//     });
-
-//     // Process closed
-//     proc.on("close", (code) => {
-//       onClose(code);
-//     });
-
-//     // Process error
-//     proc.on("error", (err) => {
-//       onError(err);
-//     });
-
-//     return proc;
-//   } catch (err) {
-//     onError(err);
-//   }
-// }
-
-// filepath: src/services/ollamaService.js
-import { spawn } from "child_process";
-
 const ALLOWED_MODELS = ["gemma:2b", "phi:2.7b"];
+
+// Use environment variable for Ollama API URL
+const OLLAMA_BASE_URL = process.env.OLLAMA_API_URL || "http://localhost:11434";
 
 // helper to remove ANSI escape codes (cursor hide/show, colors, etc.)
 function stripAnsiCodes(str) {
   return str.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, "");
 }
 
-export function runModelStream(modelId, prompt, onChunk, onClose, onError) {
+export async function runModelStream(modelId, prompt, onChunk, onClose, onError) {
   try {
     // Validate modelId
     if (!ALLOWED_MODELS.includes(modelId)) {
@@ -85,22 +23,36 @@ export function runModelStream(modelId, prompt, onChunk, onClose, onError) {
       throw new Error("Prompt is too long. Maximum 1000 characters.");
     }
 
-    // Ollama command (no --stream in v0.11.11)
-    const args = ["run", modelId];
-    const proc = spawn("ollama", args, { stdio: ["pipe", "pipe", "pipe"] });
+    console.log(`[runModelStream] Using Ollama API: ${OLLAMA_BASE_URL}`);
+    console.log(`[runModelStream] Starting model: ${modelId}`);
 
-    // Send prompt via stdin
-    proc.stdin.setEncoding("utf-8");
-    proc.stdin.write(prompt);
-    proc.stdin.end();
+    const response = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: modelId,
+        prompt: prompt,
+        stream: true,
+      }),
+    });
 
-    // Timeouts: idle timeout (no output) and total runtime
-    const IDLE_TIMEOUT_MS = process.env.OLLAMA_IDLE_TIMEOUT_MS
-      ? parseInt(process.env.OLLAMA_IDLE_TIMEOUT_MS)
-      : 30_000; // 30s default idle
-    const TOTAL_TIMEOUT_MS = process.env.OLLAMA_TOTAL_TIMEOUT_MS
-      ? parseInt(process.env.OLLAMA_TOTAL_TIMEOUT_MS)
-      : 5 * 60_000; // 5 minutes default
+    if (!response.ok) {
+      throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
+    }
+
+    if (!response.body) {
+      throw new Error("No response body from Ollama API");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let accumulatedText = "";
+
+    // Set up timeouts using your env variables
+    const IDLE_TIMEOUT_MS = parseInt(process.env.OLLAMA_IDLE_TIMEOUT_MS) || 300000; // 5 minutes
+    const TOTAL_TIMEOUT_MS = parseInt(process.env.OLLAMA_TOTAL_TIMEOUT_MS) || 600000; // 10 minutes
 
     let idleTimer = null;
     let totalTimer = null;
@@ -109,9 +61,7 @@ export function runModelStream(modelId, prompt, onChunk, onClose, onError) {
       if (idleTimer) clearTimeout(idleTimer);
       idleTimer = setTimeout(() => {
         const err = new Error("Model run idle timeout");
-        try {
-          proc.kill();
-        } catch (e) {}
+        reader.cancel();
         onError(err);
       }, IDLE_TIMEOUT_MS);
     }
@@ -120,9 +70,7 @@ export function runModelStream(modelId, prompt, onChunk, onClose, onError) {
       if (totalTimer) clearTimeout(totalTimer);
       totalTimer = setTimeout(() => {
         const err = new Error("Model run total timeout");
-        try {
-          proc.kill();
-        } catch (e) {}
+        reader.cancel();
         onError(err);
       }, TOTAL_TIMEOUT_MS);
     }
@@ -131,39 +79,62 @@ export function runModelStream(modelId, prompt, onChunk, onClose, onError) {
     resetIdle();
     startTotalTimer();
 
-    // Handle stdout (stream chunks)
-    proc.stdout.on("data", (chunk) => {
-      resetIdle();
-      const clean = stripAnsiCodes(chunk.toString());
-      if (clean.trim()) {
-        onChunk(clean);
-      }
-    });
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-    // Handle stderr (warnings/errors)
-    proc.stderr.on("data", (chunk) => {
-      resetIdle();
-      const clean = stripAnsiCodes(chunk.toString());
-      if (clean.trim()) {
-        // treat stderr as chunks too, but tag if needed
-        onChunk(clean);
-      }
-    });
+        resetIdle(); // Reset idle timer on each chunk
 
-    proc.on("close", (code) => {
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n').filter(line => line.trim());
+        
+        for (const line of lines) {
+          try {
+            const data = JSON.parse(line);
+            
+            if (data.response) {
+              const cleanResponse = stripAnsiCodes(data.response);
+              accumulatedText += cleanResponse;
+              onChunk && onChunk(cleanResponse);
+            }
+            
+            if (data.done) {
+              // Clear timers
+              if (idleTimer) clearTimeout(idleTimer);
+              if (totalTimer) clearTimeout(totalTimer);
+              
+              console.log(`[runModelStream] Stream completed. Total length: ${accumulatedText.length}`);
+              onClose && onClose(accumulatedText);
+              return;
+            }
+          } catch (e) {
+            // Skip invalid JSON lines
+            console.warn('[runModelStream] Invalid JSON line:', line);
+          }
+        }
+      }
+
+      // Stream ended without explicit done
       if (idleTimer) clearTimeout(idleTimer);
       if (totalTimer) clearTimeout(totalTimer);
-      onClose(code);
-    });
+      onClose && onClose(accumulatedText);
 
-    proc.on("error", (err) => {
+    } catch (readError) {
       if (idleTimer) clearTimeout(idleTimer);
       if (totalTimer) clearTimeout(totalTimer);
-      onError(err);
-    });
+      throw readError;
+    }
 
-    return proc;
   } catch (err) {
-    onError(err);
+    console.error(`[runModelStream] Error:`, err);
+    
+    if (err.name === 'TypeError' && err.message.includes('fetch')) {
+      onError && onError(new Error(`Cannot connect to Ollama server at ${OLLAMA_BASE_URL}. Please ensure Ollama is running with: ollama serve`));
+    } else if (err.message.includes('ECONNREFUSED')) {
+      onError && onError(new Error(`Ollama server not running at ${OLLAMA_BASE_URL}. Start with: ollama serve`));
+    } else {
+      onError && onError(err);
+    }
   }
 }

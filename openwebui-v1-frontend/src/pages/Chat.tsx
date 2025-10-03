@@ -8,7 +8,13 @@ import {
   createConversation,
   getMessages as fetchMessages,
   postMessage,
+  deleteConversation,
 } from "@/services/conversation";
+import {
+  createSavedPrompt,
+  deleteSavedPrompt,
+  updateSavedPrompt,
+} from "@/services/savedPrompts";
 // streaming handled via hook now
 import {
   ModelKey,
@@ -31,6 +37,7 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
+  modelName?: string;
 }
 
 interface ChatThread {
@@ -60,6 +67,7 @@ const Chat: React.FC = () => {
     loading,
     savedPrompts: authSavedPrompts,
     stats,
+    refreshSavedPrompts,
   } = useAuth();
   const { toast } = useToast();
 
@@ -221,6 +229,7 @@ const Chat: React.FC = () => {
             timestamp: obj?.created_at
               ? new Date(String(obj.created_at))
               : new Date(),
+            modelName: obj?.model_name ? String(obj.model_name) : undefined,
           } as Message;
         });
         setThreads((prev) =>
@@ -265,19 +274,194 @@ const Chat: React.FC = () => {
     await sendMessage(sendText, activeThreadId, threads);
   };
 
+  const handleSavePrompt = async (messageId: string, content: string) => {
+    if (!user?.id) {
+      toast({
+        title: "Error",
+        description: "Please login to save prompts",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const title =
+        content.length > 50 ? content.slice(0, 47) + "..." : content;
+      await createSavedPrompt(title, content);
+
+      toast({
+        title: "Prompt Saved",
+        description: "Your prompt has been saved successfully!",
+      });
+
+      // Refresh saved prompts to show in real-time
+      await refreshSavedPrompts();
+    } catch (error) {
+      console.error("Failed to save prompt:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save prompt. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle when user selects a saved prompt - fill it into message input
+  const handleSelectPrompt = (prompt: PromptItem) => {
+    setMessage(prompt.content);
+    // Optionally auto-focus the input field
+    setTimeout(() => {
+      const textareaElements = document.querySelectorAll("textarea");
+      const messageTextarea = Array.from(textareaElements).find(
+        (el) =>
+          el.placeholder?.includes("message") ||
+          el.placeholder?.includes("Send")
+      );
+      messageTextarea?.focus();
+    }, 100);
+  };
+
+  // Handle copying prompt content
+  const handleCopyPrompt = async (content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      toast({
+        title: "Copied!",
+        description: "Prompt content copied to clipboard",
+      });
+    } catch (error) {
+      console.error("Failed to copy:", error);
+      toast({
+        title: "Copy Failed",
+        description: "Failed to copy to clipboard",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle editing saved prompt
+  const handleEditPrompt = async (
+    id: string,
+    title: string,
+    content: string
+  ) => {
+    try {
+      await updateSavedPrompt(id, { title, prompt: content });
+      toast({
+        title: "Prompt Updated",
+        description: "Your prompt has been updated successfully!",
+      });
+      // Refresh saved prompts to show updated content
+      await refreshSavedPrompts();
+    } catch (error) {
+      console.error("Failed to update prompt:", error);
+      toast({
+        title: "Update Failed",
+        description: "Failed to update prompt. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle deleting saved prompt
+  const handleDeletePrompt = async (id: string) => {
+    try {
+      await deleteSavedPrompt(id);
+      toast({
+        title: "Prompt Deleted",
+        description: "Your prompt has been deleted successfully!",
+      });
+      // Refresh saved prompts to remove from list
+      await refreshSavedPrompts();
+    } catch (error) {
+      console.error("Failed to delete prompt:", error);
+      toast({
+        title: "Delete Failed",
+        description: "Failed to delete prompt. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle deleting conversation/chat
+  const handleDeleteConversation = async (id: string) => {
+    // Get conversation title for confirmation
+    const conversation = threads.find((t) => t.id === id);
+    const conversationTitle = conversation?.title || "this chat";
+
+    // Show confirmation dialog
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${conversationTitle}"? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      // Optimistic update - remove from frontend immediately
+      setThreads((prev) => prev.filter((t) => t.id !== id));
+      if (activeThreadId === id) {
+        setActiveThreadId(null);
+      }
+
+      // Only call API if it's a backend conversation (not local)
+      if (!id.startsWith("local-")) {
+        await deleteConversation(id);
+      }
+
+      toast({
+        title: "Chat Deleted",
+        description: "Your chat has been deleted successfully!",
+      });
+    } catch (error) {
+      console.error("Failed to delete conversation:", error);
+
+      // Revert optimistic update on error
+      try {
+        const convs = await listConversations(50);
+        const mapped = (Array.isArray(convs) ? convs : []).map((c) => {
+          const obj = c as Record<string, unknown>;
+          return {
+            id: String(obj._id),
+            title: String(obj.title || "New Chat"),
+            messages: [],
+            updatedAt: obj.updated_at
+              ? new Date(String(obj.updated_at))
+              : new Date(),
+          };
+        });
+        setThreads(mapped);
+      } catch (revertError) {
+        console.error(
+          "Failed to revert threads after delete error:",
+          revertError
+        );
+      }
+
+      toast({
+        title: "Delete Failed",
+        description: "Failed to delete chat. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const filteredSuggestions = MODEL_INFO[selectedModel].suggestions.filter(
     (s) => s.toLowerCase().includes(suggestionSearch.toLowerCase())
   );
 
   const prompts: PromptItem[] = useMemo(() => {
+    console.log("[Chat] authSavedPrompts:", authSavedPrompts);
     if (Array.isArray(authSavedPrompts) && authSavedPrompts.length > 0) {
-      return authSavedPrompts.map((p: any, idx: number) => ({
+      const mapped = authSavedPrompts.map((p: any, idx: number) => ({
         id: String(p._id || p.id || `ap-${idx}`),
         title: String(p.title || p.name || "Untitled Prompt"),
         content: String(p.content || p.prompt || ""),
       }));
+      console.log("[Chat] Mapped prompts:", mapped);
+      return mapped;
     }
     // No fallback defaults per user request
+    console.log("[Chat] No saved prompts found");
     return [];
   }, [authSavedPrompts]);
 
@@ -343,10 +527,7 @@ const Chat: React.FC = () => {
             };
             setThreads((prev) => [clone, ...prev]);
           }}
-          onDelete={(id) => {
-            setThreads((prev) => prev.filter((t) => t.id !== id));
-            if (activeThreadId === id) setActiveThreadId(null);
-          }}
+          onDelete={handleDeleteConversation}
           chatSearch={chatSearch}
           onChatSearch={setChatSearch}
           onOpenFiles={() => setIsFileManagerOpen(true)}
@@ -439,6 +620,7 @@ const Chat: React.FC = () => {
                     text: m.content,
                     sender: m.role === "user" ? "user" : "assistant",
                     createdAt: m.timestamp,
+                    modelName: m.modelName,
                     // flags may already exist on underlying message objects if they were added by hook
                     // (Type assertion defensive merge)
                     ...((m as any).isSkeleton
@@ -449,6 +631,7 @@ const Chat: React.FC = () => {
                       : {}),
                   }))}
                   userId={user?.id}
+                  onSavePrompt={handleSavePrompt}
                 />
               )}
               <div ref={bottomAnchorRef} />
@@ -527,14 +710,10 @@ const Chat: React.FC = () => {
         search={promptSearch}
         onSearch={setPromptSearch}
         prompts={prompts}
-        savedCount={
-          stats && typeof stats.saved_prompts_count === "number"
-            ? stats.saved_prompts_count
-            : Array.isArray(authSavedPrompts)
-            ? authSavedPrompts.length
-            : null
-        }
-        onSelect={(p) => setMessage(p.content)}
+        onSelect={handleSelectPrompt}
+        onCopy={handleCopyPrompt}
+        onEdit={handleEditPrompt}
+        onDelete={handleDeletePrompt}
       />
       <SettingsDialog
         open={isSettingsOpen}

@@ -12,6 +12,7 @@ export interface Message {
   sender: "user" | "model";
   text: string;
   created_at?: string;
+  model_name?: string;
 }
 
 export async function listConversations(limit = 50) {
@@ -34,5 +35,11 @@ export async function postMessage(
   return apiFetch(`conversations/${conversationId}/messages`, {
     method: "POST",
     body: { content, model } as any,
+  });
+}
+
+export async function deleteConversation(conversationId: string) {
+  return apiFetch(`conversations/${conversationId}`, {
+    method: "DELETE",
   });
 }

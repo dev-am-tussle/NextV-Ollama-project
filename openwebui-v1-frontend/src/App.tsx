@@ -20,44 +20,47 @@ const AppContent = () => {
   const location = useLocation();
   // hide footer on auth pages (login, signup and any /auth/* routes)
   const hideFooter = location.pathname.startsWith("/auth");
+  // Also hide header on auth pages to avoid any timing issues
+  const hideHeader =
+    location.pathname.startsWith("/auth") || location.pathname === "/";
 
   return (
-    <AppProvider>
-      <AuthProvider>
-        <TooltipProvider>
-          <div className="min-h-screen flex flex-col w-full">
-            {!hideFooter && <Header />}
-            <main className="flex-1">
-              <Routes>
-                <Route path="/home" element={<Home />} />
-                <Route path="/auth/login" element={<Login />} />
-                <Route path="/auth/signup" element={<Signup />} />
-                <Route
-                  path="/"
-                  element={
-                    <ProtectedRoute>
-                      <Chat />
-                    </ProtectedRoute>
-                  }
-                />
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </main>
-            {!hideFooter && <Footer />}
-          </div>
-          <Toaster />
-          <Sonner />
-        </TooltipProvider>
-      </AuthProvider>
-    </AppProvider>
+    <div className="min-h-screen flex flex-col w-full">
+      {!hideHeader && <Header />}
+      <main className="flex-1">
+        <Routes>
+          <Route path="/home" element={<Home />} />
+          <Route path="/auth/login" element={<Login />} />
+          <Route path="/auth/signup" element={<Signup />} />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <Chat />
+              </ProtectedRoute>
+            }
+          />
+          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </main>
+      {!hideFooter && <Footer />}
+    </div>
   );
 };
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <BrowserRouter>
-      <AppContent />
+      <AppProvider>
+        <AuthProvider>
+          <TooltipProvider>
+            <AppContent />
+            <Toaster />
+            <Sonner />
+          </TooltipProvider>
+        </AuthProvider>
+      </AppProvider>
     </BrowserRouter>
   </QueryClientProvider>
 );

@@ -9,6 +9,7 @@ import {
   appendToModelMessage,
   finalizeConversationTouch,
   getConversation,
+  deleteConversation,
 } from "../services/chat.service.js";
 import { Message } from "../models/message.model.js";
 import { runModelStream } from "../services/ollama.service.js";
@@ -72,10 +73,14 @@ router.post("/:conversationId/messages", async (req, res) => {
   try {
     // Basic validation
     if (typeof content !== "string" || !content.trim()) {
-      return res.status(400).json({ error: "Content must be a non-empty string" });
+      return res
+        .status(400)
+        .json({ error: "Content must be a non-empty string" });
     }
     if (content.length > 4000) {
-      return res.status(400).json({ error: "Content too long (max 4000 chars)" });
+      return res
+        .status(400)
+        .json({ error: "Content too long (max 4000 chars)" });
     }
     if (model && typeof model !== "string") {
       return res.status(400).json({ error: "Invalid model parameter" });
@@ -84,14 +89,16 @@ router.post("/:conversationId/messages", async (req, res) => {
     // Ownership check
     const conv = await getConversation(conversationId, req.user.id);
     if (!conv) {
-      return res.status(404).json({ error: "Conversation not found or access denied" });
+      return res
+        .status(404)
+        .json({ error: "Conversation not found or access denied" });
     }
 
     // Persist user message first
     const userMsg = await addUserMessage(conversationId, content);
 
     // Create model placeholder
-    const modelMsg = await createModelMessage(conversationId);
+    const modelMsg = await createModelMessage(conversationId, model, model);
 
     let collected = "";
     let errored = false;
@@ -127,8 +134,17 @@ router.post("/:conversationId/messages", async (req, res) => {
     // Finalize: merge chunks into text & set status
     try {
       const update = errored
-        ? { status: "error", error: collected || "Stream failed", updated_at: new Date() }
-        : { status: "done", text: collected, chunks: [], updated_at: new Date() };
+        ? {
+            status: "error",
+            error: collected || "Stream failed",
+            updated_at: new Date(),
+          }
+        : {
+            status: "done",
+            text: collected,
+            chunks: [],
+            updated_at: new Date(),
+          };
       await Message.updateOne({ _id: modelMsg._id }, { $set: update });
       await finalizeConversationTouch(conversationId);
     } catch (finErr) {
@@ -137,12 +153,17 @@ router.post("/:conversationId/messages", async (req, res) => {
 
     const durationMs = Date.now() - started;
     return res.json({
-      user: { id: userMsg._id, text: userMsg.text, created_at: userMsg.created_at },
+      user: {
+        id: userMsg._id,
+        text: userMsg.text,
+        created_at: userMsg.created_at,
+      },
       assistant: {
         id: modelMsg._id,
         text: collected,
         status: errored ? "error" : "done",
-        error: errored ? (collected || "Model stream error") : undefined,
+        error: errored ? collected || "Model stream error" : undefined,
+        model_name: model,
         duration_ms: durationMs,
       },
       conversation: { id: conv._id, updated_at: new Date() },
@@ -150,6 +171,18 @@ router.post("/:conversationId/messages", async (req, res) => {
   } catch (e) {
     console.error("Error in POST /:conversationId/messages:", e);
     return res.status(500).json({ error: e.message });
+  }
+});
+
+// Delete a conversation
+router.delete("/:conversationId", async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const result = await deleteConversation(conversationId, req.user.id);
+    res.json(result);
+  } catch (e) {
+    console.error("Error deleting conversation:", e);
+    res.status(400).json({ error: e.message });
   }
 });
 

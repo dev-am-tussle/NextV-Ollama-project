@@ -11,7 +11,7 @@ function sseSend(res, event, payload) {
 
 export async function streamGenerate(req, res) {
   try {
-    const { modelId, prompt } = req.body || {};
+    const { modelId, prompt, modelName } = req.body || {};
 
     if (typeof modelId !== "string" || typeof prompt !== "string") {
       return res
@@ -40,14 +40,26 @@ export async function streamGenerate(req, res) {
     const conversationId = req.body.conversationId;
     let convoDoc = null;
     const userId = req.user?.id;
-    if (conversationId) {
+
+    // Better validation for conversationId - check if it's a valid non-empty string
+    if (
+      conversationId &&
+      typeof conversationId === "string" &&
+      conversationId.trim()
+    ) {
+      console.log(
+        `[streamGenerate] Using existing conversation: ${conversationId}`
+      );
       // verify ownership
       convoDoc = await chatService.getConversation(conversationId, userId);
       if (!convoDoc) {
         return res.status(404).json({ error: "Conversation not found." });
       }
     } else {
-      // create conversation for user
+      console.log(
+        `[streamGenerate] Creating new conversation for user: ${userId}`
+      );
+      // create conversation for user only when no valid conversationId
       convoDoc = await chatService.createConversation(userId, "New Chat");
     }
 
@@ -55,9 +67,10 @@ export async function streamGenerate(req, res) {
 
     // Persist user message first (include user id)
     const userMsg = await chatService.addUserMessage(convoId, prompt, userId);
+    
 
     // Create assistant placeholder message and immediately send its id to client
-    const assistantMsg = await chatService.createModelMessage(convoId);
+    const assistantMsg = await chatService.createModelMessage(convoId, modelId, modelName);
     sseSend(res, "message_id", { message_id: assistantMsg._id.toString() });
 
     // Helper to send chunk event
@@ -85,9 +98,15 @@ export async function streamGenerate(req, res) {
         finished = true;
         try {
           // finalize: collapse chunks into text and mark done
-          await chatService.finalizeModelMessage(assistantMsg._id);
+          const finalMsg = await chatService.finalizeModelMessage(assistantMsg._id);
           await chatService.finalizeConversationTouch(convoId);
-          sseSend(res, "done", {});
+          sseSend(res, "done", {
+            message_id: assistantMsg._id.toString(),
+            text: finalMsg?.text || null,
+            conversation_id: convoId.toString(),
+            status: "done",
+            model_name: finalMsg?.model_name || modelName || null,
+          });
         } catch (e) {
           console.error("Error finalizing model message:", e);
         }

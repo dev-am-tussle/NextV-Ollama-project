@@ -28,6 +28,7 @@ const MessageSchema = new mongoose.Schema(
     // Optional streaming chunk array (joined into text when finalized)
     chunks: { type: [String], default: [] },
     model: { type: String, required: false, index: true },
+    model_name: { type: String, required: false, index: true },
     status: {
       type: String,
       enum: ["pending", "streaming", "done", "error"],

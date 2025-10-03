@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { User, createUserWithDefaults } from "../models/user.models.js";
+import { AvailableModel } from "../models/availableModel.model.js";
 import { Conversation } from "../models/conversation.model.js";
 import { UserSettings } from "../models/user.models.js";
 import { SavedPrompt } from "../models/savedPrompt.model.js";
@@ -8,6 +9,35 @@ import { FileMeta } from "../models/file.model.js";
 import { exchangeCodeForToken, getMicrosoftProfile } from "./oauth.service.js";
 
 const ROUNDS = Number(process.env.BCRYPT_ROUNDS || 12);
+
+// Helper function to setup default pulled models for new users
+async function setupDefaultPulledModels(userId) {
+  try {
+    const defaultModelNames = ["gemma:2b", "phi:2.7b"];
+    const defaultModels = await AvailableModel.find({ 
+      name: { $in: defaultModelNames },
+      is_active: true 
+    });
+    
+    if (defaultModels.length > 0) {
+      const pulledModels = defaultModels.map(model => ({
+        model_id: model._id,
+        pulled_at: new Date(),
+        usage_count: 0,
+        last_used: null
+      }));
+      
+      await UserSettings.updateOne(
+        { user_id: userId },
+        { $set: { pulled_models: pulledModels } }
+      );
+      
+      console.log(`✅ Setup ${pulledModels.length} default models for user ${userId}`);
+    }
+  } catch (error) {
+    console.error("Failed to setup default pulled models:", error);
+  }
+}
 
 function signToken(user) {
   return jwt.sign(
@@ -54,10 +84,30 @@ export async function loginUser({ email, password }) {
 
   const token = signToken(user);
 
-  // gather profile, settings and light-weight lists
-  const settings = user.settings_id
-    ? await UserSettings.findById(user.settings_id).lean()
-    : null;
+  // gather profile, settings with populated pulled models
+  let settings = null;
+  if (user.settings_id) {
+    settings = await UserSettings.findById(user.settings_id)
+      .populate({
+        path: 'pulled_models.model_id',
+        model: 'AvailableModel',
+        select: 'name display_name description size category tags performance_tier provider model_family parameters use_cases min_ram_gb'
+      })
+      .lean();
+    
+    // If no pulled models found, setup default models
+    if (!settings.pulled_models || settings.pulled_models.length === 0) {
+      await setupDefaultPulledModels(user._id);
+      // Re-fetch settings with populated models
+      settings = await UserSettings.findById(user.settings_id)
+        .populate({
+          path: 'pulled_models.model_id',
+          model: 'AvailableModel',
+          select: 'name display_name description size category tags performance_tier provider model_family parameters use_cases min_ram_gb'
+        })
+        .lean();
+    }
+  }
 
   const [conversationsCount, savedPromptsCount, savedFilesCount] =
     await Promise.all([

@@ -19,6 +19,13 @@ export interface AvailableModel {
   updated_at?: string;
 }
 
+export interface PulledModel extends AvailableModel {
+  pulled_at: string;
+  usage_count: number;
+  last_used: string | null;
+  is_pulled: true;
+}
+
 export interface ModelsResponse {
   success: boolean;
   data: AvailableModel[];
@@ -102,4 +109,31 @@ export async function getLocalModels(): Promise<string[]> {
 // Get model usage statistics (future implementation)
 export async function getModelUsage(modelId: string) {
   return apiFetch(`admin/models/${modelId}/usage`);
+}
+
+// User: Get pulled models with full details
+export async function getUserPulledModels(): Promise<{ success: boolean; data: PulledModel[]; count: number }> {
+  return apiFetch("user/pulled-models");
+}
+
+// User: Add a model to pulled models
+export async function addPulledModel(modelName: string): Promise<{ success: boolean; message: string; model: AvailableModel }> {
+  return apiFetch("user/pulled-models", {
+    method: "POST",
+    body: { model_name: modelName } as any,
+  });
+}
+
+// User: Remove a model from pulled models
+export async function removePulledModel(modelName: string): Promise<{ success: boolean; message: string }> {
+  return apiFetch(`user/pulled-models/${modelName}`, {
+    method: "DELETE",
+  });
+}
+
+// User: Update model usage statistics
+export async function updateModelUsage(modelName: string): Promise<{ success: boolean; message: string }> {
+  return apiFetch(`user/pulled-models/${modelName}/usage`, {
+    method: "POST",
+  });
 }

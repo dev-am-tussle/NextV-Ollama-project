@@ -8,6 +8,8 @@ import cookieParser from "cookie-parser";
 import modelRoutes from "./routes/ollama.routes.js";
 import modelsRoutes from "./routes/models.routes.js";
 import adminModelsRoutes from "./routes/adminModels.routes.js";
+import adminUsersRoutes from "./routes/adminUsers.routes.js";
+import userModelsRoutes from "./routes/userModels.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import conversationRoutes from "./routes/conversation.routes.js";
 import savedPromptsRoutes from "./routes/savedprompts.routes.js";
@@ -68,6 +70,8 @@ app.get("/health", (req, res) => res.json({ status: "ok" }));
 app.use("/api/v1/models", modelRoutes); // ollama streaming routes
 app.use("/api/v1/available-models", modelsRoutes); // user sees active models
 app.use("/api/admin/models", adminModelsRoutes); // admin manages catalog
+app.use("/api/admin/users", adminUsersRoutes); // admin manages users
+app.use("/api/v1/user", userModelsRoutes); // user manages their pulled models
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/conversations", conversationRoutes);
 app.use("/api/v1/saved-prompts", savedPromptsRoutes);

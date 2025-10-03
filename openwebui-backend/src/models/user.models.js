@@ -10,10 +10,19 @@ const UserSettingsSchema = new mongoose.Schema(
     },
     theme: { type: String, default: "light" },
     default_model: { type: String, default: "gemma:2b" },
-    // list of available models for this user (default global whitelist)
-    avail_models: {
-      type: [String],
-      default: ["gemma:2b", "phi:2.7b"],
+    // list of pulled models for this user with full model data
+    pulled_models: {
+      type: [{
+        model_id: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "AvailableModel",
+          required: true
+        },
+        pulled_at: { type: Date, default: Date.now },
+        usage_count: { type: Number, default: 0 },
+        last_used: { type: Date, default: null }
+      }],
+      default: []
     },
     saved_prompts_ref: {
       type: mongoose.Schema.Types.ObjectId,

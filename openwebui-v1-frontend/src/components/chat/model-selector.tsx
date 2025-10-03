@@ -30,15 +30,16 @@ import {
   Zap,
   Info,
   Tag,
-  Settings
+  Settings,
+  Trash2
 } from "lucide-react";
-import { getAvailableModels, pullModel, type AvailableModel } from "@/services/models";
+import { getAvailableModels, getUserPulledModels, addPulledModel, removePulledModel, type AvailableModel, type PulledModel } from "@/services/models";
 
 export type ModelKey = "Gemma" | "Phi";
 
 // Extend the AvailableModel interface for frontend usage
 interface ModelWithPullStatus extends AvailableModel {
-  is_pulled?: boolean; // Will be added by frontend after checking local status
+  is_pulled?: boolean; // Will be determined by checking against user's pulled models
 }
 
 interface ModelSelectorProps {
@@ -200,27 +201,44 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   availableModels,
 }) => {
   const [allModels, setAllModels] = useState<ModelWithPullStatus[]>([]);
+  const [userPulledModels, setUserPulledModels] = useState<PulledModel[]>([]);
   const [selectedModelDetail, setSelectedModelDetail] = useState<ModelWithPullStatus | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [pullingModels, setPullingModels] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
 
-  // Fetch available models from backend
+  // Fetch available models and user's pulled models from backend
   useEffect(() => {
     const fetchModels = async () => {
       try {
         setLoading(true);
-        const response = await getAvailableModels();
         
-        if (response.success) {
-          // TODO: Add logic to check which models are locally pulled
-          // For now, mark first two as pulled for demo
-          const modelsWithPullStatus: ModelWithPullStatus[] = response.data.map((model, index) => ({
+        // Fetch both available models and user's pulled models
+        const [availableResponse, pulledResponse] = await Promise.all([
+          getAvailableModels(),
+          getUserPulledModels().catch(err => {
+            console.warn('Failed to fetch user pulled models:', err);
+            return { success: false, data: [], count: 0 };
+          })
+        ]);
+        
+        if (availableResponse.success) {
+          // Create a Set of pulled model names for quick lookup
+          const pulledModelNames = new Set(
+            pulledResponse.success ? pulledResponse.data.map(model => model.name) : []
+          );
+          
+          // Mark models as pulled based on user's pulled models
+          const modelsWithPullStatus: ModelWithPullStatus[] = availableResponse.data.map(model => ({
             ...model,
-            is_pulled: index < 2 // Demo: first 2 models are "pulled"
+            is_pulled: pulledModelNames.has(model.name)
           }));
           
           setAllModels(modelsWithPullStatus);
+          
+          if (pulledResponse.success) {
+            setUserPulledModels(pulledResponse.data);
+          }
         }
       } catch (error) {
         console.error('Failed to fetch models:', error);
@@ -270,8 +288,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     try {
       setPullingModels(prev => new Set(prev).add(modelName));
       
-      // Use centralized API service
-      const response = await pullModel(modelName);
+      // Use the new addPulledModel API service
+      const response = await addPulledModel(modelName);
 
       if (response.success) {
         // Update model status to pulled
@@ -280,6 +298,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             ? { ...model, is_pulled: true }
             : model
         ));
+        
+        // Refresh user pulled models
+        const pulledResponse = await getUserPulledModels();
+        if (pulledResponse.success) {
+          setUserPulledModels(pulledResponse.data);
+        }
       }
     } catch (error) {
       console.error('Failed to pull model:', error);
@@ -289,6 +313,29 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         newSet.delete(modelName);
         return newSet;
       });
+    }
+  };
+
+  const handleRemoveModel = async (modelName: string) => {
+    try {
+      const response = await removePulledModel(modelName);
+
+      if (response.success) {
+        // Update model status to not pulled
+        setAllModels(prev => prev.map(model => 
+          model.name === modelName 
+            ? { ...model, is_pulled: false }
+            : model
+        ));
+        
+        // Refresh user pulled models
+        const pulledResponse = await getUserPulledModels();
+        if (pulledResponse.success) {
+          setUserPulledModels(pulledResponse.data);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to remove model:', error);
     }
   };
 
@@ -334,6 +381,18 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveModel(model.name);
+                      }}
+                      className="h-6 w-6 p-0 hover:bg-red-100 hover:text-red-600"
+                      title="Remove model"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
                     <Button
                       size="sm"
                       variant="ghost"

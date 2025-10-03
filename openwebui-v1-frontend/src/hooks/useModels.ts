@@ -252,6 +252,13 @@ export const useModels = () => {
             });
             
             if (!response.ok) {
+                if (response.status === 401) {
+                    // Token expired or invalid - redirect to login
+                    localStorage.removeItem('superAdminToken');
+                    localStorage.removeItem('isSuperAdmin');
+                    localStorage.removeItem('userProfile');
+                    throw new Error('Session expired. Please login again.');
+                }
                 throw new Error(`HTTP ${response.status}: Failed to fetch models`);
             }
             

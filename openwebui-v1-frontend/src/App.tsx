@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, lazy } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -13,19 +13,24 @@ import Login from "./pages/auth/Login";
 import Signup from "./pages/auth/Signup";
 import Chat from "./pages/Chat";
 import ProtectedRoute from "@/components/routing/ProtectedRoute";
+import SuperAdminProtectedRoute from "@/components/routing/SuperAdminProtectedRoute";
 import NotFound from "./pages/NotFound";
 import { Admin } from "./pages/admin/Admin";
+import SuperAdmin from "./pages/supadmin/SuperAdmin";
 import { initializeBrandingSettings } from "@/services/adminSettings";
+
+// Lazy load SuperAdminLogin
+const SuperAdminLogin = lazy(() => import("./pages/supadmin/SuperAdminLogin"));
 
 const queryClient = new QueryClient();
 
 const AppContent = () => {
   const location = useLocation();
   // hide footer on auth pages (login, signup and any /auth/* routes)
-  const hideFooter = location.pathname.startsWith("/auth") || location.pathname === "/" || location.pathname.startsWith("/admin");
+  const hideFooter = location.pathname.startsWith("/auth") || location.pathname === "/" || location.pathname.startsWith("/admin") || location.pathname.startsWith("/superadmin");
   // Also hide header on auth pages to avoid any timing issues
   const hideHeader =
-    location.pathname.startsWith("/auth") || location.pathname === "/" || location.pathname.startsWith("/admin");
+    location.pathname.startsWith("/auth") || location.pathname === "/" || location.pathname.startsWith("/admin") || location.pathname.startsWith("/superadmin");
 
   return (
     <div className="min-h-screen flex flex-col w-full">
@@ -49,6 +54,19 @@ const AppContent = () => {
               <ProtectedRoute>
                 <Admin />
               </ProtectedRoute>
+            }
+          />
+          <Route path="/superadmin/auth/login" element={
+            <React.Suspense fallback={<div>Loading...</div>}>
+              <SuperAdminLogin />
+            </React.Suspense>
+          } />
+          <Route
+            path="/superadmin/*"
+            element={
+              <SuperAdminProtectedRoute>
+                <SuperAdmin />
+              </SuperAdminProtectedRoute>
             }
           />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

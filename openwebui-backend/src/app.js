@@ -6,6 +6,8 @@ import helmet from "helmet";
 import morgan from "morgan";
 import cookieParser from "cookie-parser";
 import modelRoutes from "./routes/ollama.routes.js";
+import modelsRoutes from "./routes/models.routes.js";
+import adminModelsRoutes from "./routes/adminModels.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import conversationRoutes from "./routes/conversation.routes.js";
 import savedPromptsRoutes from "./routes/savedprompts.routes.js";
@@ -63,7 +65,9 @@ validateEnv();
 app.get("/health", (req, res) => res.json({ status: "ok" }));
 
 // routes
-app.use("/api/v1/models", modelRoutes);
+app.use("/api/v1/models", modelRoutes); // ollama streaming routes
+app.use("/api/v1/available-models", modelsRoutes); // user sees active models
+app.use("/api/admin/models", adminModelsRoutes); // admin manages catalog
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/conversations", conversationRoutes);
 app.use("/api/v1/saved-prompts", savedPromptsRoutes);

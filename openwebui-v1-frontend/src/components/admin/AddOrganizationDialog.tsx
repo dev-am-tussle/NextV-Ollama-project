@@ -22,7 +22,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Shuffle, Eye, EyeOff, Plus, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { createOrganization, type CreateOrganizationData } from "@/services/organizationManagement";
+import { createOrganization, updateOrganization, type CreateOrganizationData, type OrganizationWithStats } from "@/services/organizationManagement";
 
 interface Admin {
   name: string;
@@ -34,12 +34,16 @@ interface AddOrganizationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  mode?: 'create' | 'edit';
+  organization?: OrganizationWithStats | null;
 }
 
 const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
   open,
   onOpenChange,
   onSuccess,
+  mode = 'create',
+  organization,
 }) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -47,34 +51,87 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
   const [admins, setAdmins] = useState<Admin[]>([
     { name: "", email: "", password: "" }
   ]);
-  const [formData, setFormData] = useState<CreateOrganizationData>({
-    name: "",
-    slug: "",
-    description: "",
-    admin_email: "",
-    admin_name: "",
-    admin_password: "",
-    settings: {
-      limits: {
-        max_users: 10,
-        max_concurrent_sessions: 5,
-        monthly_request_limit: 10000,
-        storage_limit_mb: 1000
-      },
-      default_employee_settings: {
-        theme: "dark",
-        default_model: "gemma:2b",
-        can_save_prompts: true,
-        can_upload_files: true
-      },
-      features: {
-        analytics_enabled: true,
-        file_sharing_enabled: true,
-        custom_prompts_enabled: true,
-        api_access_enabled: false
-      }
+  const [formData, setFormData] = useState<CreateOrganizationData>(() => {
+    if (mode === 'edit' && organization) {
+      return {
+        name: organization.name,
+        slug: organization.slug || '',
+        description: organization.description || '',
+        admin_email: '', // not editable in edit mode
+        admin_name: '',
+        admin_password: '',
+        settings: {
+          limits: {
+            max_users: organization.settings.limits.max_users,
+            max_concurrent_sessions: organization.settings.limits.max_concurrent_sessions,
+            monthly_request_limit: organization.settings.limits.monthly_request_limit,
+            storage_limit_mb: organization.settings.limits.storage_limit_mb,
+          },
+          default_employee_settings: {
+            theme: organization.settings.default_employee_settings.theme,
+            default_model: organization.settings.default_employee_settings.default_model,
+            can_save_prompts: organization.settings.default_employee_settings.can_save_prompts,
+            can_upload_files: organization.settings.default_employee_settings.can_upload_files,
+          },
+          features: {
+            analytics_enabled: organization.settings.features.analytics_enabled,
+            file_sharing_enabled: organization.settings.features.file_sharing_enabled,
+            custom_prompts_enabled: organization.settings.features.custom_prompts_enabled,
+            api_access_enabled: organization.settings.features.api_access_enabled,
+          },
+        },
+      };
     }
+    return {
+      name: "",
+      slug: "",
+      description: "",
+      admin_email: "",
+      admin_name: "",
+      admin_password: "",
+      settings: {
+        limits: {
+          max_users: 10,
+          max_concurrent_sessions: 5,
+          monthly_request_limit: 10000,
+          storage_limit_mb: 1000,
+        },
+        default_employee_settings: {
+          theme: "dark",
+          default_model: "gemma:2b",
+          can_save_prompts: true,
+          can_upload_files: true,
+        },
+        features: {
+          analytics_enabled: true,
+          file_sharing_enabled: true,
+          custom_prompts_enabled: true,
+          api_access_enabled: false,
+        },
+      },
+    };
   });
+
+  // When switching to edit mode or organization changes, update form
+  React.useEffect(() => {
+    if (mode === 'edit' && organization) {
+      setFormData(prev => ({
+        ...prev,
+        name: organization.name,
+        slug: organization.slug || '',
+        description: organization.description || '',
+        settings: {
+          limits: { ...organization.settings.limits },
+          default_employee_settings: { ...organization.settings.default_employee_settings },
+          features: { ...organization.settings.features },
+        },
+      }));
+    } else if (mode === 'create' && open) {
+      // reset when opening create dialog
+      resetForm();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, organization, open]);
 
   const generatePassword = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%&*';
@@ -236,50 +293,69 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
       return;
     }
 
-    // Validate at least one admin
-    const validAdmins = admins.filter(admin => 
-      admin.name.trim() && admin.email.trim() && admin.password.trim() && admin.password.length >= 8
-    );
+    let submissionData: any = { ...formData };
+    let validAdmins: Admin[] = [];
 
-    if (validAdmins.length === 0) {
-      toast({
-        title: "Validation Error", 
-        description: "At least one admin with complete details is required",
-        variant: "destructive",
-      });
-      return;
+    if (mode === 'create') {
+      // Validate at least one admin only in create mode
+      validAdmins = admins.filter(admin => 
+        admin.name.trim() && admin.email.trim() && admin.password.trim() && admin.password.length >= 8
+      );
+      if (validAdmins.length === 0) {
+        toast({
+          title: "Validation Error", 
+          description: "At least one admin with complete details is required",
+          variant: "destructive",
+        });
+        return;
+      }
+      const primaryAdmin = validAdmins[0];
+      submissionData = {
+        ...formData,
+        admin_name: primaryAdmin.name,
+        admin_email: primaryAdmin.email,
+        admin_password: primaryAdmin.password,
+      };
+    } else if (mode === 'edit') {
+      // Remove admin creation fields
+      delete submissionData.admin_email;
+      delete submissionData.admin_name;
+      delete submissionData.admin_password;
     }
-
-    // For backward compatibility, use first admin for the API call
-    const primaryAdmin = validAdmins[0];
-    const submissionData = {
-      ...formData,
-      admin_name: primaryAdmin.name,
-      admin_email: primaryAdmin.email,
-      admin_password: primaryAdmin.password
-    };
 
     setLoading(true);
     try {
-      const response = await createOrganization(submissionData);
-      
-      if (response.success) {
-        // If there are additional admins, we would need to create them separately
-        // This would require additional API calls after organization creation
-        
-        toast({
-          title: "Success",
-          description: `Organization created successfully with ${validAdmins.length} admin(s)`,
-        });
-        
-        resetForm();
-        onOpenChange(false);
-        if (onSuccess) onSuccess();
+      if (mode === 'create') {
+        const response = await createOrganization(submissionData);
+        if (response.success) {
+          toast({
+            title: "Success",
+            description: `Organization created successfully with ${validAdmins.length} admin(s)`,
+          });
+          resetForm();
+          onOpenChange(false);
+          if (onSuccess) onSuccess();
+        }
+      } else if (mode === 'edit' && organization) {
+        const updatePayload = {
+          name: formData.name,
+            slug: formData.slug,
+            description: formData.description,
+            settings: formData.settings,
+        };
+        const response = await updateOrganization(organization._id, updatePayload as any);
+        if (response.success) {
+          toast({
+            title: "Success",
+            description: `Organization updated successfully`,
+          });
+          onOpenChange(false);
+          if (onSuccess) onSuccess();
+        }
       }
     } catch (error: any) {
-      console.error("Create organization error:", error);
-      
-      let errorMessage = "Failed to create organization";
+      console.error("Organization submit error:\n", error);
+      let errorMessage = mode === 'edit' ? 'Failed to update organization' : 'Failed to create organization';
       
       // Handle specific error messages from the API
       if (error.response?.data?.error) {
@@ -666,7 +742,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
             onClick={handleSubmit} 
             disabled={loading}
           >
-            {loading ? "Creating..." : "Create Organization"}
+            {loading ? (mode === 'edit' ? 'Saving...' : 'Creating...') : (mode === 'edit' ? 'Save Changes' : 'Create Organization')}
           </Button>
         </DialogFooter>
       </DialogContent>

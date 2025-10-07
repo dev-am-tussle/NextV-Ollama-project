@@ -31,6 +31,8 @@ export const OrganizationManagement = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [deletingOrgId, setDeletingOrgId] = useState<string | null>(null);
   const [showAddOrgDialog, setShowAddOrgDialog] = useState(false);
+  const [editOrgDialogOpen, setEditOrgDialogOpen] = useState(false);
+  const [orgBeingEdited, setOrgBeingEdited] = useState<OrganizationWithStats | null>(null);
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 10,
@@ -308,14 +310,26 @@ export const OrganizationManagement = () => {
                       </div>
                       
                       <div className="flex items-center gap-2 ml-4">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => navigate(`/superadmin/organization/${org._id}`)}
-                        >
-                          <Eye className="h-4 w-4 mr-1" />
-                          View
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => navigate(`/superadmin/organization/${org._id}`)}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            View
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setOrgBeingEdited(org);
+                              setEditOrgDialogOpen(true);
+                            }}
+                          >
+                            Edit
+                          </Button>
+                        </div>
                         
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
@@ -364,6 +378,16 @@ export const OrganizationManagement = () => {
         open={showAddOrgDialog}
         onOpenChange={setShowAddOrgDialog}
         onSuccess={loadOrganizations}
+      />
+      <AddOrganizationDialog
+        open={editOrgDialogOpen}
+        onOpenChange={(open) => {
+          setEditOrgDialogOpen(open);
+          if (!open) setOrgBeingEdited(null);
+        }}
+        onSuccess={loadOrganizations}
+        mode="edit"
+        organization={orgBeingEdited}
       />
     </div>
   );

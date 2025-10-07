@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+// Removed inline edit textarea usage
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { 
@@ -19,7 +19,6 @@ import {
   Edit,
   Plus,
   X,
-  Save,
   Eye,
   EyeOff,
   Trash2,
@@ -39,6 +38,7 @@ import {
   deleteAdmin,
   type OrganizationDetails as OrgDetailsType 
 } from "@/services/organizationManagement";
+import AddOrganizationDialog from "@/components/admin/AddOrganizationDialog";
 
 export const OrganizationDetails = () => {
   const { id } = useParams<{ id: string }>();
@@ -47,8 +47,7 @@ export const OrganizationDetails = () => {
   
   const [orgData, setOrgData] = useState<OrgDetailsType | null>(null);
   const [loading, setLoading] = useState(true);
-  const [editMode, setEditMode] = useState(false);
-  const [editData, setEditData] = useState<any>({});
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   
   // Model management state
   const [availableModels, setAvailableModels] = useState<any[]>([]);
@@ -81,11 +80,7 @@ export const OrganizationDetails = () => {
       
       if (response.success) {
         setOrgData(response.data);
-        setEditData({
-          name: response.data.organization.name,
-          description: response.data.organization.description || "",
-          slug: response.data.organization.slug || ""
-        });
+        // data loaded
       }
     } catch (error) {
       console.error("Failed to load organization details:", error);
@@ -135,23 +130,8 @@ export const OrganizationDetails = () => {
     }
   };
 
-  const handleSaveOrganization = async () => {
-    if (!id) return;
-    try {
-      await updateOrganization(id, editData);
-      toast({
-        title: "Success",
-        description: "Organization updated successfully",
-      });
-      setEditMode(false);
-      loadOrganizationDetails();
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update organization",
-        variant: "destructive",
-      });
-    }
+  const handlePostEditSuccess = () => {
+    loadOrganizationDetails();
   };
 
   const handleSaveModels = async () => {
@@ -294,108 +274,86 @@ export const OrganizationDetails = () => {
             Back
           </Button>
           <div>
-            {editMode ? (
-              <div className="space-y-2">
-                <Input
-                  value={editData.name}
-                  onChange={(e) => setEditData({...editData, name: e.target.value})}
-                  className="text-3xl font-bold h-12 text-foreground"
-                />
-                <Textarea
-                  value={editData.description}
-                  onChange={(e) => setEditData({...editData, description: e.target.value})}
-                  placeholder="Organization description"
-                  className="text-muted-foreground"
-                />
-              </div>
-            ) : (
-              <>
-                <h1 className="text-3xl font-bold text-foreground">{organization.name}</h1>
-                <p className="text-muted-foreground">{organization.description || 'No description'}</p>
-              </>
-            )}
+            <h1 className="text-3xl font-bold text-foreground">{organization.name}</h1>
+            <p className="text-muted-foreground">{organization.description || 'No description'}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {editMode ? (
-            <>
-              <Button onClick={handleSaveOrganization} size="sm">
-                <Save className="mr-2 h-4 w-4" />
-                Save Changes
+          <Button onClick={() => setEditDialogOpen(true)} size="sm" variant="outline">
+            <Edit className="mr-2 h-4 w-4" />
+            Edit Organization
+          </Button>
+          <Dialog open={modelManagementOpen} onOpenChange={setModelManagementOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" variant="outline">
+                <Settings className="mr-2 h-4 w-4" />
+                Manage Models
               </Button>
-              <Button variant="outline" onClick={() => setEditMode(false)} size="sm">
-                Cancel
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button onClick={() => setEditMode(true)} size="sm" variant="outline">
-                <Edit className="mr-2 h-4 w-4" />
-                Edit Organization
-              </Button>
-              <Dialog open={modelManagementOpen} onOpenChange={setModelManagementOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm" variant="outline">
-                    <Settings className="mr-2 h-4 w-4" />
-                    Manage Models
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-2xl">
-                  <DialogHeader>
-                    <DialogTitle>Assign Models to Organization</DialogTitle>
-                    <DialogDescription>
-                      Select which models this organization can access
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 max-h-96 overflow-y-auto">
-                    {availableModels.map((model) => (
-                      <div key={model._id} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={model._id}
-                          checked={selectedModels.includes(model._id)}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setSelectedModels([...selectedModels, model._id]);
-                            } else {
-                              setSelectedModels(selectedModels.filter(id => id !== model._id));
-                            }
-                          }}
-                        />
-                        <Label htmlFor={model._id} className="flex-1">
-                          <div>
-                            <p className="font-medium">{model.name}</p>
-                            <p className="text-sm text-muted-foreground">{model.description}</p>
-                          </div>
-                        </Label>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Assign Models to Organization</DialogTitle>
+                <DialogDescription>
+                  Select which models this organization can access
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 max-h-96 overflow-y-auto">
+                {availableModels.map((model) => (
+                  <div key={model._id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={model._id}
+                      checked={selectedModels.includes(model._id)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedModels([...selectedModels, model._id]);
+                        } else {
+                          setSelectedModels(selectedModels.filter(id => id !== model._id));
+                        }
+                      }}
+                    />
+                    <Label htmlFor={model._id} className="flex-1">
+                      <div>
+                        <p className="font-medium">{model.name}</p>
+                        <p className="text-sm text-muted-foreground">{model.description}</p>
                       </div>
-                    ))}
+                    </Label>
                   </div>
-                  <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => setModelManagementOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button onClick={handleSaveModels}>
-                      Save Changes
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            </>
-          )}
-          <Badge variant="outline" className={
-            organization.status === 'active' 
-              ? 'text-green-600 bg-green-100' 
-              : 'text-gray-600 bg-gray-100'
-          }>
-            {organization.status}
-          </Badge>
-          <Badge variant="secondary">
-            {organization.subscription.plan}
-          </Badge>
+                ))}
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setModelManagementOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleSaveModels}>
+                  Save Changes
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
+      <AddOrganizationDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        mode="edit"
+        organization={organization as any}
+        onSuccess={handlePostEditSuccess}
+      />
+      <div className="flex items-center gap-2">
+        <Badge variant="outline" className={
+          organization.status === 'active' 
+            ? 'text-green-600 bg-green-100' 
+            : 'text-gray-600 bg-gray-100'
+        }>
+          {organization.status}
+        </Badge>
+        <Badge variant="secondary">
+          {organization.subscription.plan}
+        </Badge>
+      </div>
+      
 
-      {/* Stats Cards */}
+  {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-2">
@@ -577,15 +535,22 @@ export const OrganizationDetails = () => {
               </div>
             </CardHeader>
             <CardContent>
-              {(adminsList.length === 0 && admins.length === 0) ? (
+              {(() => {
+                // Merge admins from org details and separate paged admins avoiding duplicates
+                const combined = [...admins, ...adminsList];
+                const uniqueById = combined.reduce((acc: Record<string, any>, adm: any) => {
+                  if (!acc[adm._id]) acc[adm._id] = adm;
+                  return acc;
+                }, {});
+                const mergedAdmins = Object.values(uniqueById);
+                return mergedAdmins.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <Crown className="h-8 w-8 mx-auto mb-2 opacity-50" />
                   <p>No admins found</p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {/* Show existing admins from org data */}
-                  {admins.map((admin) => (
+                  {mergedAdmins.map((admin: any) => (
                     <div key={admin._id} className="flex items-center justify-between p-4 border rounded-lg">
                       <div>
                         <h3 className="font-medium">{admin.name}</h3>
@@ -616,39 +581,8 @@ export const OrganizationDetails = () => {
                       </div>
                     </div>
                   ))}
-                  {/* Show additional admins from separate API call */}
-                  {adminsList.map((admin) => (
-                    <div key={admin._id} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div>
-                        <h3 className="font-medium">{admin.name}</h3>
-                        <p className="text-sm text-muted-foreground">{admin.email}</p>
-                        <p className="text-xs text-muted-foreground">
-                          Joined {new Date(admin.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={admin.status === 'active' ? 'default' : 'secondary'}>
-                          {admin.status}
-                        </Badge>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleResetPassword(admin._id)}
-                        >
-                          <RotateCcw className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDeleteAdmin(admin._id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
                 </div>
-              )}
+              );})()}
             </CardContent>
           </Card>
         </TabsContent>

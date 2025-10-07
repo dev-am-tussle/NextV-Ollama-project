@@ -15,6 +15,10 @@ import conversationRoutes from "./routes/conversation.routes.js";
 import savedPromptsRoutes from "./routes/savedprompts.routes.js";
 import filesRoutes from "./routes/files.routes.js";
 import oauthRoutes from "./routes/oauth.routes.js";
+import adminAuthRoutes from "./routes/adminAuth.routes.js";
+import organizationManagementRoutes from "./routes/organizationManagement.routes.js";
+import superAdminRoutes from "./routes/superAdmin.routes.js";
+import unifiedAuthRoutes from "./routes/unifiedAuth.routes.js";
 import jwt from "jsonwebtoken";
 import { connectDB, closeDB } from "./config/ollama.db.js"; // DB helpers import
 
@@ -78,6 +82,14 @@ app.use("/api/v1/saved-prompts", savedPromptsRoutes);
 app.use("/api/v1/files", filesRoutes);
 app.use("/api/v1/auth", oauthRoutes);
 
+// Admin routes
+app.use("/api/admin/auth", adminAuthRoutes);
+app.use("/api/super-admin/auth", superAdminRoutes);
+app.use("/api/super-admin/organizations", organizationManagementRoutes);
+
+// Unified authentication route
+app.use("/api/v1/unified-auth", unifiedAuthRoutes);
+
 app.get("/", async (req, res) => {
   // Default welcome message
   const base = { message: "Welcome to OpenWebUI Backend API" };
@@ -101,7 +113,7 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message || "Server error" });
 });
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT;
 
 async function start() {
   try {

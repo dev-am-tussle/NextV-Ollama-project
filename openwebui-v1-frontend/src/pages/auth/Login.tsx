@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Card,
   CardContent,
@@ -13,7 +14,8 @@ import {
 import { useAuth } from "@/providers/AuthProvider";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, User, Shield } from "lucide-react";
+import { unifiedLogin } from "@/services/unifiedAuth";
 
 const MicrosoftLogo = ({ className = "h-4 w-4" }: { className?: string }) => (
   <svg
@@ -34,6 +36,7 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [userType, setUserType] = useState<'user' | 'admin'>('user');
   const { login } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -52,33 +55,45 @@ const Login = () => {
 
     setIsLoading(true);
     try {
-      await login({ email, password });
-      // wait briefly for authProfile to be persisted by auth.login and for
-      // AuthProvider to pick it up. This avoids a race where ProtectedRoute
-      // redirects back to /auth/login before user state is set.
-      const waitForProfile = async (timeoutMs = 2000) => {
-        const start = Date.now();
-        while (Date.now() - start < timeoutMs) {
-          const raw = localStorage.getItem("authProfile");
-          const token =
-            localStorage.getItem("authToken") || localStorage.getItem("token");
-          if (raw && token) return true;
-          // small delay
-          // eslint-disable-next-line no-await-in-loop
-          await new Promise((r) => setTimeout(r, 100));
+      if (userType === 'admin') {
+        // Use unified login for admin
+        const response = await unifiedLogin(email, password, 'admin');
+        
+        if (response.success) {
+          // Navigate based on admin type
+          navigate(response.data.redirectTo);
+          toast({
+            title: "Welcome back, Admin!",
+            description: "You have been successfully logged in.",
+          });
         }
-        return false;
-      };
-      await waitForProfile(2000);
-      navigate("/");
-      toast({
-        title: "Welcome back!",
-        description: "You have been successfully logged in.",
-      });
-    } catch (error) {
+      } else {
+        // Use existing user login
+        await login({ email, password });
+        
+        // Wait for profile to be persisted
+        const waitForProfile = async (timeoutMs = 2000) => {
+          const start = Date.now();
+          while (Date.now() - start < timeoutMs) {
+            const raw = localStorage.getItem("authProfile");
+            const token =
+              localStorage.getItem("authToken") || localStorage.getItem("token");
+            if (raw && token) return true;
+            await new Promise((r) => setTimeout(r, 100));
+          }
+          return false;
+        };
+        await waitForProfile(2000);
+        navigate("/");
+        toast({
+          title: "Welcome back!",
+          description: "You have been successfully logged in.",
+        });
+      }
+    } catch (error: any) {
       toast({
         title: "Login Failed",
-        description: "Invalid email or password. Please try again.",
+        description: error.message || "Invalid email or password. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -100,72 +115,151 @@ const Login = () => {
           <CardHeader>
             <CardTitle>Sign In</CardTitle>
             <CardDescription>
-              Enter your email and password to access your account
+              Choose your account type and enter your credentials
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  disabled={isLoading}
-                  autoComplete="email"
-                />
-              </div>
+            <Tabs value={userType} onValueChange={(value) => setUserType(value as 'user' | 'admin')} className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="user" className="flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  User
+                </TabsTrigger>
+                <TabsTrigger value="admin" className="flex items-center gap-2">
+                  <Shield className="h-4 w-4" />
+                  Admin
+                </TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="user" className="space-y-4 mt-6">
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="Enter your email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      disabled={isLoading}
+                      autoComplete="email"
+                    />
+                  </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    disabled={isLoading}
-                    autoComplete="current-password"
-                  />
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Enter your password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        disabled={isLoading}
+                        autoComplete="current-password"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowPassword(!showPassword)}
+                        disabled={isLoading}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                        <span className="sr-only">
+                          {showPassword ? "Hide password" : "Show password"}
+                        </span>
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <Link to="#" className="text-sm text-primary hover:underline">
+                      Forgot password?
+                    </Link>
+                  </div>
+
                   <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                    onClick={() => setShowPassword(!showPassword)}
+                    type="submit"
+                    className="w-full btn-hover"
                     disabled={isLoading}
                   >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                    <span className="sr-only">
-                      {showPassword ? "Hide password" : "Show password"}
-                    </span>
+                    {isLoading ? "Signing in..." : "Sign in as User"}
                   </Button>
-                </div>
-              </div>
+                </form>
+              </TabsContent>
+              
+              <TabsContent value="admin" className="space-y-4 mt-6">
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="admin-email">Admin Email</Label>
+                    <Input
+                      id="admin-email"
+                      type="email"
+                      placeholder="Enter your admin email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      disabled={isLoading}
+                      autoComplete="email"
+                    />
+                  </div>
 
-              <div className="flex items-center justify-between">
-                <Link to="#" className="text-sm text-primary hover:underline">
-                  Forgot password?
-                </Link>
-              </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="admin-password">Admin Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="admin-password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Enter your admin password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        disabled={isLoading}
+                        autoComplete="current-password"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowPassword(!showPassword)}
+                        disabled={isLoading}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                        <span className="sr-only">
+                          {showPassword ? "Hide password" : "Show password"}
+                        </span>
+                      </Button>
+                    </div>
+                  </div>
 
-              <Button
-                type="submit"
-                className="w-full btn-hover"
-                disabled={isLoading}
-              >
-                {isLoading ? "Signing in..." : "Sign in"}
-              </Button>
-            </form>
+                  <div className="text-sm text-muted-foreground">
+                    <Shield className="inline h-4 w-4 mr-1" />
+                    Admin access for organization management
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="w-full btn-hover"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? "Signing in..." : "Sign in as Admin"}
+                  </Button>
+                </form>
+              </TabsContent>
+            </Tabs>
 
             <div className="mt-6 text-center text-sm">
               <span className="text-muted-foreground">
@@ -189,31 +283,34 @@ const Login = () => {
             ← Back to home
           </Link>
         </div>
-        {/* Microsoft OAuth button */}
-        <div className="text-center mt-4">
-          <button
-            type="button"
-            onClick={() => {
-              const clientId = import.meta.env.VITE_MICROSOFT_CLIENT_ID;
-              const redirect = import.meta.env.VITE_MICROSOFT_REDIRECT_URI;
-              const tenant =
-                import.meta.env.VITE_MICROSOFT_TENANT_ID || "common";
-              const params = new URLSearchParams({
-                client_id: clientId,
-                response_type: "code",
-                redirect_uri: redirect,
-                response_mode: "query",
-                scope: "openid profile email",
-                prompt: "select_account",
-              });
-              window.location.href = `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize?${params.toString()}`;
-            }}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 border rounded-md mt-3 hover:bg-muted"
-          >
-            <MicrosoftLogo />
-            <span>Continue with Microsoft</span>
-          </button>
-        </div>
+        
+        {/* Microsoft OAuth button - only show for user login */}
+        {userType === 'user' && (
+          <div className="text-center mt-4">
+            <button
+              type="button"
+              onClick={() => {
+                const clientId = import.meta.env.VITE_MICROSOFT_CLIENT_ID;
+                const redirect = import.meta.env.VITE_MICROSOFT_REDIRECT_URI;
+                const tenant =
+                  import.meta.env.VITE_MICROSOFT_TENANT_ID || "common";
+                const params = new URLSearchParams({
+                  client_id: clientId,
+                  response_type: "code",
+                  redirect_uri: redirect,
+                  response_mode: "query",
+                  scope: "openid profile email",
+                  prompt: "select_account",
+                });
+                window.location.href = `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize?${params.toString()}`;
+              }}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 border rounded-md mt-3 hover:bg-muted"
+            >
+              <MicrosoftLogo />
+              <span>Continue with Microsoft</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

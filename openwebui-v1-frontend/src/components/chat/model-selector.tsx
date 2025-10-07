@@ -33,9 +33,7 @@ import {
   Settings,
   Trash2
 } from "lucide-react";
-import { getAvailableModels, getUserPulledModels, addPulledModel, removePulledModel, type AvailableModel, type PulledModel } from "@/services/models";
-
-export type ModelKey = "Gemma" | "Phi";
+import { getAvailableModels, getUserPulledModels, addPulledModel, removePulledModel, pullModelWithProgress, removeModelFromSystem, type AvailableModel, type PulledModel, type PullProgress } from "@/services/models";
 
 // Extend the AvailableModel interface for frontend usage
 interface ModelWithPullStatus extends AvailableModel {
@@ -43,23 +41,24 @@ interface ModelWithPullStatus extends AvailableModel {
 }
 
 interface ModelSelectorProps {
-  selected: ModelKey;
-  onSelect: (m: ModelKey) => void;
+  selected: string; // Now using backend model names directly (e.g., "gemma:2b", "phi:2.7b")
+  onSelect: (modelName: string) => void;
   compareMode: boolean;
   onToggleCompare: () => void;
   // optional list of models user is allowed to use (backend-provided)
   availableModels?: string[] | null;
 }
 
-const iconFor = (model: ModelKey) => {
-  switch (model) {
-    case "Gemma":
-      return <Gem className="h-4 w-4" />;
-    case "Phi":
-      return <Atom className="h-4 w-4" />;
-    default:
-      return <Wind className="h-4 w-4" />;
+const iconFor = (modelName: string) => {
+  const lowerName = modelName.toLowerCase();
+  if (lowerName.includes('gemma')) {
+    return <Gem className="h-4 w-4" />;
+  } else if (lowerName.includes('phi')) {
+    return <Atom className="h-4 w-4" />;
+  } else if (lowerName.includes('llama')) {
+    return <Brain className="h-4 w-4" />;
   }
+  return <Wind className="h-4 w-4" />;
 };
 
 const getPerformanceTierColor = (tier: string) => {
@@ -88,17 +87,18 @@ const getCategoryIcon = (category: string) => {
   }
 };
 
-// Single source of truth mapping from UI key to backend model id.
-export const keyToBackend: Record<ModelKey, string> = {
-  Gemma: "gemma:2b",
-  Phi: "phi:2.7b",
+// Helper function to get display name from model name
+const getDisplayName = (modelName: string): string => {
+  // Use the display_name from backend, fallback to model name
+  return modelName;
 };
 
 const ModelDetailPanel: React.FC<{ 
   model: ModelWithPullStatus; 
   onPull: (modelName: string) => void;
   isPulling: boolean;
-}> = ({ model, onPull, isPulling }) => {
+  progress?: PullProgress;
+}> = ({ model, onPull, isPulling, progress }) => {
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -171,6 +171,80 @@ const ModelDetailPanel: React.FC<{
         </div>
       )}
 
+      {/* Progress Display */}
+      {isPulling && progress && (
+        <div className="space-y-3 p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+          <div className="flex items-center gap-2">
+            <Download className="h-4 w-4 text-blue-600 animate-pulse" />
+            <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
+              {progress.status || 'Downloading...'}
+            </span>
+          </div>
+          
+          {progress.percentage !== undefined && progress.percentage > 0 && (
+            <div className="space-y-1">
+              <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${Math.min(progress.percentage, 100)}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-xs text-blue-700 dark:text-blue-300">
+                <span>{progress.percentage}%</span>
+                {progress.completed && progress.total && (
+                  <span>
+                    {(progress.completed / (1024 * 1024)).toFixed(1)}MB / {(progress.total / (1024 * 1024)).toFixed(1)}MB
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Error Display */}
+      {progress && progress.type === 'error' && (
+        <div className="space-y-3 p-4 bg-red-50 dark:bg-red-950/20 rounded-lg border border-red-200 dark:border-red-800">
+          <div className="flex items-center gap-2">
+            <X className="h-4 w-4 text-red-600" />
+            <span className="text-sm font-medium text-red-900 dark:text-red-100">
+              Download Failed
+            </span>
+          </div>
+          <p className="text-sm text-red-700 dark:text-red-300">
+            {progress.error}
+          </p>
+          {progress.suggestions && progress.suggestions.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-red-800 dark:text-red-200">Suggestions:</p>
+              <ul className="text-xs text-red-700 dark:text-red-300 space-y-1">
+                {progress.suggestions.map((suggestion, index) => (
+                  <li key={index} className="flex items-start gap-1">
+                    <span className="text-red-500">•</span>
+                    <span>{suggestion}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Success Display */}
+      {progress && progress.type === 'complete' && progress.success && (
+        <div className="space-y-3 p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
+          <div className="flex items-center gap-2">
+            <Check className="h-4 w-4 text-green-600" />
+            <span className="text-sm font-medium text-green-900 dark:text-green-100">
+              Download Complete!
+            </span>
+          </div>
+          <p className="text-sm text-green-700 dark:text-green-300">
+            {progress.message || `Successfully downloaded ${model.display_name}`}
+          </p>
+        </div>
+      )}
+
       {/* Action Button */}
       <div className="pt-4 border-t">
         {model.is_pulled ? (
@@ -205,6 +279,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const [selectedModelDetail, setSelectedModelDetail] = useState<ModelWithPullStatus | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [pullingModels, setPullingModels] = useState<Set<string>>(new Set());
+  const [pullProgress, setPullProgress] = useState<Map<string, PullProgress>>(new Map());
   const [loading, setLoading] = useState(false);
 
   // Fetch available models and user's pulled models from backend
@@ -254,30 +329,14 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const pulledModels = allModels.filter(model => model.is_pulled && model.is_active);
   const unpulledModels = allModels.filter(model => !model.is_pulled && model.is_active);
 
-  // Legacy ModelKey support for existing dropdown
-  const allowedBackendIds = new Set<string>();
-  if (availableModels && availableModels.length > 0) {
-    for (const m of availableModels) {
-      if (typeof m === "string" && m.trim()) allowedBackendIds.add(m);
-    }
-  } else {
-    allowedBackendIds.add("gemma:2b");
-    allowedBackendIds.add("phi:2.7b");
-  }
+  // Get currently selected model details for display
+  const selectedModelDetails = allModels.find(model => model.name === selected) || 
+    (pulledModels.length > 0 ? pulledModels[0] : allModels[0]);
 
-  const backendToKey = Object.entries(keyToBackend).reduce(
-    (acc, [uiKey, backendId]) => {
-      if (!acc[backendId]) acc[backendId] = uiKey as ModelKey;
-      return acc;
-    },
-    {} as Record<string, ModelKey>
-  );
-
-  let models: ModelKey[] = Array.from(allowedBackendIds)
-    .map((id) => backendToKey[id])
-    .filter(Boolean) as ModelKey[];
-
-  if (models.length === 0) models = ["Gemma", "Phi"];
+  // Helper to get model display name
+  const getModelDisplayName = (model: ModelWithPullStatus) => {
+    return model.display_name || model.name;
+  };
 
   const handleModelClick = (model: ModelWithPullStatus) => {
     setSelectedModelDetail(model);
@@ -288,31 +347,92 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     try {
       setPullingModels(prev => new Set(prev).add(modelName));
       
-      // Use the new addPulledModel API service
-      const response = await addPulledModel(modelName);
+      // Initialize progress
+      setPullProgress(prev => new Map(prev).set(modelName, {
+        type: 'progress',
+        status: 'Starting download...',
+        percentage: 0
+      }));
 
-      if (response.success) {
-        // Update model status to pulled
-        setAllModels(prev => prev.map(model => 
-          model.name === modelName 
-            ? { ...model, is_pulled: true }
-            : model
-        ));
-        
-        // Refresh user pulled models
-        const pulledResponse = await getUserPulledModels();
-        if (pulledResponse.success) {
-          setUserPulledModels(pulledResponse.data);
+      // Use real model pulling with progress tracking
+      await pullModelWithProgress(modelName, {
+        onProgress: (progress) => {
+          console.log(`[ModelSelector] Progress for ${modelName}:`, progress);
+          setPullProgress(prev => new Map(prev).set(modelName, progress));
+        },
+        onError: (error) => {
+          console.error(`[ModelSelector] Error pulling ${modelName}:`, error);
+          setPullProgress(prev => new Map(prev).set(modelName, error));
+          
+          // Remove from pulling set on error
+          setPullingModels(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(modelName);
+            return newSet;
+          });
+        },
+        onComplete: async (result) => {
+          console.log(`[ModelSelector] Completed pulling ${modelName}:`, result);
+          
+          if (result.success) {
+            // Update model status to pulled
+            setAllModels(prev => prev.map(model => 
+              model.name === modelName 
+                ? { ...model, is_pulled: true }
+                : model
+            ));
+            
+            // Add to user's pulled models via API
+            try {
+              await addPulledModel(modelName);
+              
+              // Refresh user pulled models
+              const pulledResponse = await getUserPulledModels();
+              if (pulledResponse.success) {
+                setUserPulledModels(pulledResponse.data);
+              }
+            } catch (dbError) {
+              console.warn('Failed to update DB after successful pull:', dbError);
+            }
+          }
+          
+          // Update progress with completion status
+          setPullProgress(prev => new Map(prev).set(modelName, result));
+          
+          // Remove from pulling set
+          setPullingModels(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(modelName);
+            return newSet;
+          });
+          
+          // Clear progress after a delay
+          setTimeout(() => {
+            setPullProgress(prev => {
+              const newMap = new Map(prev);
+              newMap.delete(modelName);
+              return newMap;
+            });
+          }, 3000);
         }
-      }
+      });
+
     } catch (error) {
-      console.error('Failed to pull model:', error);
-    } finally {
+      console.error('Failed to start model pull:', error);
+      
+      // Remove from pulling set on error
       setPullingModels(prev => {
         const newSet = new Set(prev);
         newSet.delete(modelName);
         return newSet;
       });
+      
+      // Set error in progress
+      setPullProgress(prev => new Map(prev).set(modelName, {
+        type: 'error',
+        error: error instanceof Error ? error.message : 'Failed to start download',
+        suggestions: ['Try again later', 'Check internet connection']
+      }));
     }
   };
 
@@ -348,8 +468,17 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             size="sm"
             className="flex items-center gap-2 pr-2"
           >
-            {iconFor(selected)}
-            <span className="font-medium">{selected}</span>
+            {selectedModelDetails ? (
+              <>
+                {getCategoryIcon(selectedModelDetails.category)}
+                <span className="font-medium">{getModelDisplayName(selectedModelDetails)}</span>
+              </>
+            ) : (
+              <>
+                <Wind className="h-4 w-4" />
+                <span className="font-medium">Select Model</span>
+              </>
+            )}
             <ChevronDown className="h-4 w-4 opacity-70" />
           </Button>
         </DropdownMenuTrigger>
@@ -367,11 +496,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 <DropdownMenuItem
                   key={model._id}
                   onClick={() => {
-                    // Convert to ModelKey if possible, otherwise use first available
-                    const modelKey = backendToKey[model.name] || models[0];
-                    onSelect(modelKey);
+                    // Use model.name directly for backend communication
+                    onSelect(model.name);
                   }}
-                  className="flex items-center justify-between p-3 cursor-pointer"
+                  className={`flex items-center justify-between p-3 cursor-pointer ${
+                    selected === model.name ? 'bg-accent' : ''
+                  }`}
                 >
                   <div className="flex items-center gap-3">
                     {getCategoryIcon(model.category)}
@@ -468,6 +598,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 model={selectedModelDetail}
                 onPull={handlePullModel}
                 isPulling={pullingModels.has(selectedModelDetail.name)}
+                progress={pullProgress.get(selectedModelDetail.name)}
               />
             </div>
           )}
@@ -477,4 +608,4 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   );
 };
 
-export { iconFor as modelIcon };
+export { iconFor as modelIcon, getDisplayName };

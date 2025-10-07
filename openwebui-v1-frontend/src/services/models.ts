@@ -137,3 +137,110 @@ export async function updateModelUsage(modelName: string): Promise<{ success: bo
     method: "POST",
   });
 }
+
+// Progress tracking interfaces for real model pulling
+export interface PullProgress {
+  type: 'progress' | 'error' | 'complete' | 'heartbeat';
+  status?: string;
+  completed?: number;
+  total?: number;
+  digest?: string;
+  percentage?: number;
+  error?: string;
+  code?: string;
+  suggestions?: string[];
+  success?: boolean;
+  modelName?: string;
+  message?: string;
+}
+
+export interface PullCallbacks {
+  onProgress?: (progress: PullProgress) => void;
+  onError?: (error: PullProgress) => void;
+  onComplete?: (result: PullProgress) => void;
+}
+
+// Real model pulling with progress tracking using SSE
+export async function pullModelWithProgress(
+  modelName: string, 
+  callbacks: PullCallbacks
+): Promise<void> {
+  const { onProgress, onError, onComplete } = callbacks;
+  
+  try {
+    const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/v1/models/pull`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+      },
+      body: JSON.stringify({ modelName }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('Response body is not readable');
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      
+      // Process complete lines
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+      for (const line of lines) {
+        if (line.trim()) {
+          try {
+            // Parse SSE data
+            const eventData = line.replace(/^data: /, '');
+            const progress: PullProgress = JSON.parse(eventData);
+
+            switch (progress.type) {
+              case 'progress':
+                onProgress && onProgress(progress);
+                break;
+              case 'error':
+                onError && onError(progress);
+                return; // Stop processing on error
+              case 'complete':
+                onComplete && onComplete(progress);
+                return; // Stop processing on completion
+              case 'heartbeat':
+                // Keep connection alive, no action needed
+                break;
+            }
+          } catch (parseError) {
+            console.warn('Failed to parse SSE data:', line, parseError);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error in pullModelWithProgress:', error);
+    onError && onError({
+      type: 'error',
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      code: 'CONNECTION_ERROR',
+      suggestions: ['Check internet connection', 'Try again later', 'Contact support']
+    });
+  }
+}
+
+// Remove model from system (actual Ollama removal)
+export async function removeModelFromSystem(modelName: string): Promise<{ success: boolean; message: string }> {
+  return apiFetch("models/remove", {
+    method: "DELETE",
+    body: { modelName },
+  });
+}

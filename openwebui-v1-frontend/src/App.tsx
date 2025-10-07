@@ -56,6 +56,7 @@ const AppContent = () => {
               </ProtectedRoute>
             }
           />
+          
           <Route path="/superadmin/auth/login" element={
             <React.Suspense fallback={<div>Loading...</div>}>
               <SuperAdminLogin />

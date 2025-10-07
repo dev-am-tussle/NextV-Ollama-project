@@ -165,6 +165,20 @@ export const MessagesPane: React.FC<Props> = ({
                   </div>
                 ) : (
                   <div className="text-sm whitespace-pre-wrap leading-relaxed">
+                    {/* Show error message for error status */}
+                    {(m as any).status === "error" && (m as any).error ? (
+                      <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 mb-2">
+                        <div className="flex items-center gap-2 text-destructive font-medium text-sm mb-1">
+                          <X className="h-4 w-4" />
+                          Failed to generate response
+                        </div>
+                        <div className="text-xs text-muted-foreground whitespace-pre-wrap">
+                          {(m as any).error}
+                        </div>
+                      </div>
+                    ) : null}
+                    
+                    {/* Regular message content */}
                     {m.text}
                     {m.isStreaming && (
                       <span className="inline-block w-2 h-4 bg-primary/70 ml-1 align-baseline animate-pulse rounded-sm" />

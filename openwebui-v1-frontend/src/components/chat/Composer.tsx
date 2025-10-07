@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
-import { ModelKey } from "./model-selector";
 import { Button } from "@/components/ui/button";
 interface Props {
-  onSend: (text: string, model?: ModelKey) => Promise<void> | void;
-  selectedModel: ModelKey;
+  onSend: (text: string, model?: string) => Promise<void> | void;
+  selectedModel: string; // Now using backend model names
 }
 
 export const Composer: React.FC<Props> = ({ onSend, selectedModel }) => {

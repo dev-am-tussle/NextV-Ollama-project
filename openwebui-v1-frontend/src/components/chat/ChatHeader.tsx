@@ -1,9 +1,9 @@
-import React from "react";
+﻿import React from "react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { ModelSelector, ModelKey } from "./model-selector";
+import { ModelSelector } from "./model-selector";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
-import { Share2, Star, HelpCircle, Sliders, LogOut, Settings2 } from "lucide-react";
+import { Share2, HelpCircle, Sliders, LogOut, Settings2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -18,8 +18,8 @@ import { useNavigate } from "react-router-dom";
 
 interface Props {
   title?: string;
-  selectedModel: ModelKey;
-  onSelectModel: (m: ModelKey) => void;
+  selectedModel: string;
+  onSelectModel: (modelName: string) => void;
   compareMode: boolean;
   onToggleCompare: () => void;
   onShare: () => void;
@@ -85,7 +85,6 @@ export const ChatHeader: React.FC<Props> = ({
               className="flex gap-2"
               onClick={() => {
                 try {
-                  // open help in new tab (fall back to toast if blocked)
                   const opened = window.open("/help", "_blank");
                   if (!opened) throw new Error("Popup blocked");
                 } catch (e) {

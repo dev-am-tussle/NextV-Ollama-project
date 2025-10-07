@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon src/app.js",
-    "seed:models": "node src/scripts/seedModels.js"
+    "seed:models": "node src/scripts/seedModels.js",
+    "create:superadmin": "node src/scripts/createSuperAdmin.js"
   },
   "keywords": [],
   "author": "",

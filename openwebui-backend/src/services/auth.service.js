@@ -41,7 +41,12 @@ async function setupDefaultPulledModels(userId) {
 
 function signToken(user) {
   return jwt.sign(
-    { sub: user._id.toString(), email: user.email },
+    { 
+      sub: user._id.toString(), 
+      email: user.email,
+      role: user.role,
+      is_super_admin: user.is_super_admin || false
+    },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || "1h" }
   );

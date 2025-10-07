@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, MessageSquare, Package, Settings, FileText, Menu, X, LogOut } from "lucide-react";
+import { LayoutDashboard, Building2, MessageSquare, Package, Settings, FileText, Menu, X, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { name: "Dashboard", href: "/superadmin", icon: LayoutDashboard },
   { name: "Models", href: "/superadmin", icon: Package },
-  { name: "Users", href: "/superadmin/users", icon: Users },
+  { name: "Organizations", href: "/superadmin/organizations", icon: Building2 },
   { name: "Conversations", href: "/superadmin/conversations", icon: MessageSquare },
   { name: "Settings", href: "/superadmin/settings", icon: Settings },
   { name: "Logs", href: "/superadmin/logs", icon: FileText },

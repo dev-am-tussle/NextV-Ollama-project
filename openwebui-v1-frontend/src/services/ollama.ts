@@ -1,6 +1,6 @@
 export type StreamCallbacks = {
   onChunk?: (text: string) => void;
-  onClose?: (final?: { text?: string; messageId?: string; modelName?: string }) => void;
+  onClose?: (final?: { text?: string; messageId?: string; modelName?: string; conversation_id?: string }) => void;
   onError?: (err: any) => void;
   onMessageId?: (id: string) => void; // new: backend message id early
 };
@@ -92,7 +92,7 @@ export async function streamGenerate(
               onMessageId?.(obj.message_id);
             } else if (event === "done") {
               // final event includes full text
-              onClose?.({ text: obj.text, messageId: obj.message_id, modelName: obj.model_name });
+              onClose?.({ text: obj.text, messageId: obj.message_id, modelName: obj.model_name, conversation_id: obj.conversation_id });
             } else {
               // fallback: stringify entire obj
               onChunk?.(JSON.stringify(obj));

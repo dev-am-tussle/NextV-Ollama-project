@@ -1,4 +1,5 @@
 import { AvailableModel } from "../models/availableModel.model.js";
+import { invalidateModelsCache } from "../services/ollama.service.js";
 import mongoose from "mongoose";
 
 // GET /api/admin/models - Admin manages catalog
@@ -92,6 +93,9 @@ export async function createModel(req, res) {
 
     await model.save();
 
+    // Invalidate models cache since we added a new model
+    invalidateModelsCache();
+
     res.status(201).json({
       success: true,
       data: model,
@@ -160,6 +164,9 @@ export async function updateModel(req, res) {
       });
     }
 
+    // Invalidate models cache since we updated a model
+    invalidateModelsCache();
+
     res.json({
       success: true,
       data: model,
@@ -203,6 +210,9 @@ export async function deleteModel(req, res) {
         error: "Model not found"
       });
     }
+
+    // Invalidate models cache since we deleted a model
+    invalidateModelsCache();
 
     res.json({
       success: true,

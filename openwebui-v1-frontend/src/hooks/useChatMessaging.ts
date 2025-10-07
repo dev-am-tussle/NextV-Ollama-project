@@ -1,7 +1,14 @@
 import { useState, useRef, useCallback } from "react";
 import { createConversation, postMessage } from "@/services/conversation";
 import { streamGenerate } from "@/services/ollama";
-import { keyToBackend, ModelKey } from "@/components/chat/model-selector";
+
+// Structured error interface matching backend OllamaError
+interface StructuredError {
+  message: string;
+  code?: string;
+  userMessage?: string;
+  suggestions?: string[];
+}
 
 export type ChatMessage = {
   id: string; // local or backend message id
@@ -35,7 +42,7 @@ export type ChatStatus =
   | "error";
 
 interface UseChatMessagingArgs {
-  selectedModel: ModelKey;
+  selectedModel: string; // Using backend model names directly
   setThreads: React.Dispatch<React.SetStateAction<ChatThread[]>>;
   setActiveThreadId: (id: string) => void;
   toast: (opts: {
@@ -54,6 +61,39 @@ export function useChatMessaging({
   const [isStreaming, setIsStreaming] = useState(false);
   const [status, setStatus] = useState<ChatStatus>("idle");
   const abortRef = useRef<AbortController | null>(null);
+
+  // Helper to format error messages with suggestions
+  const formatErrorMessage = (error: any): { title: string; description: string } => {
+    // Check if it's a structured error from backend
+    if (error.userMessage && error.suggestions) {
+      const suggestions = Array.isArray(error.suggestions) 
+        ? error.suggestions.slice(0, 3).join(' • ') 
+        : '';
+      return {
+        title: getErrorTitle(error.code),
+        description: suggestions ? `${error.userMessage}\n\nSuggestions: ${suggestions}` : error.userMessage
+      };
+    }
+    
+    // Fallback for regular errors
+    return {
+      title: "Error",
+      description: String(error?.message || error || "An unexpected error occurred")
+    };
+  };
+
+  // Get user-friendly error titles based on error codes
+  const getErrorTitle = (code?: string): string => {
+    switch (code) {
+      case 'MODEL_NOT_FOUND': return 'Model Not Available';
+      case 'CONNECTION_FAILED': return 'Connection Error';
+      case 'SERVER_OFFLINE': return 'Service Unavailable';
+      case 'EMPTY_PROMPT': return 'Empty Message';
+      case 'PROMPT_TOO_LONG': return 'Message Too Long';
+      case 'MISSING_MODEL_ID': return 'No Model Selected';
+      default: return 'Error';
+    }
+  };
 
   // Mongo style ObjectId (24 hex chars) detector
   const isBackendId = (id: string | null | undefined) =>
@@ -102,7 +142,7 @@ export function useChatMessaging({
         )
       );
 
-      const backendModelId = keyToBackend[selectedModel] || undefined;
+      const backendModelId = selectedModel; // selectedModel is already backend model name
       const assistantId = `assistant-${Date.now()}`;
 
       // Insert placeholder assistant skeleton message
@@ -158,9 +198,10 @@ export function useChatMessaging({
           workingThreadId = backendConversationId;
           setActiveThreadId(backendConversationId);
         } catch (err) {
+          const errorInfo = formatErrorMessage(err);
           toast({
-            title: "Error",
-            description: "Failed to create conversation",
+            title: errorInfo.title,
+            description: errorInfo.description,
             variant: "destructive",
           });
           setIsStreaming(false);
@@ -247,9 +288,10 @@ export function useChatMessaging({
                 );
               },
               onError: (err) => {
+                const errorInfo = formatErrorMessage(err);
                 toast({
-                  title: "Stream error",
-                  description: String((err as any)?.message || err),
+                  title: errorInfo.title,
+                  description: errorInfo.description,
                   variant: "destructive",
                 });
                 setStatus("error");
@@ -264,7 +306,7 @@ export function useChatMessaging({
                                   ...m,
                                   isStreaming: false,
                                   status: "error",
-                                  error: String((err as any)?.message || err),
+                                  error: errorInfo.description,
                                 }
                               : m
                           ),
@@ -342,9 +384,10 @@ export function useChatMessaging({
         }
         setStatus("done");
       } catch (err: any) {
+        const errorInfo = formatErrorMessage(err);
         toast({
-          title: "Error",
-          description: err?.message || "Failed to send message",
+          title: errorInfo.title,
+          description: errorInfo.description,
           variant: "destructive",
         });
         setStatus("error");

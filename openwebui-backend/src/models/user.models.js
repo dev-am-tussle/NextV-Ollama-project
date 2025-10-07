@@ -61,6 +61,52 @@ const UserSchema = new mongoose.Schema(
     },
     // password_hash is optional to allow OAuth-only accounts
     password_hash: { type: String, required: false },
+    // User role for access control
+    role: {
+      type: String,
+      enum: ['employee', 'user', 'super_admin'], // Added super_admin role
+      default: 'user',
+      index: true
+    },
+    // Super admin flag for easier queries
+    is_super_admin: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+    // Organization reference for employees
+    organization_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Organization",
+      default: null,
+      index: true
+    },
+    // Employee-specific fields
+    employee_details: {
+      department: { type: String, default: null },
+      job_title: { type: String, default: null },
+      employee_id: { type: String, default: null },
+      manager_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null
+      },
+      hired_date: { type: Date, default: null },
+      // Invitation tracking
+      invited_by: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Admin",
+        default: null
+      },
+      invitation_accepted_at: { type: Date, default: null }
+    },
+    // User status
+    status: {
+      type: String,
+      enum: ['active', 'inactive', 'pending', 'suspended'],
+      default: 'active',
+      index: true
+    },
     // support multiple external auth providers (e.g. microsoft)
     auth_providers: [
       {
@@ -87,6 +133,10 @@ const UserSchema = new mongoose.Schema(
 
 // Secondary index for creation date queries (e.g., admin dashboards)
 UserSchema.index({ created_at: -1 });
+// Additional indexes for role-based queries
+UserSchema.index({ role: 1, status: 1 });
+UserSchema.index({ organization_id: 1, role: 1 });
+UserSchema.index({ organization_id: 1, status: 1 });
 
 UserSchema.pre("save", function (next) {
   this.updated_at = new Date();

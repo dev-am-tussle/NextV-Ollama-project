@@ -26,8 +26,8 @@ const SuperAdminLogin = () => {
     setIsLoading(true);
 
     try {
-      // Use the actual authentication API instead of mock
-      const response = await fetch(buildApiUrl('/api/v1/auth/login'), {
+      // Call the new super admin authentication endpoint
+      const response = await fetch(buildApiUrl('/api/super-admin/auth/login'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -35,19 +35,37 @@ const SuperAdminLogin = () => {
         body: JSON.stringify({
           email: credentials.email,
           password: credentials.password
-        })
+        }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error('Invalid credentials');
+        throw new Error(data.message || 'Authentication failed');
       }
 
-      const data = await response.json();
-      
-      // Store the actual JWT token from backend
-      localStorage.setItem("superAdminToken", data.token);
-      localStorage.setItem("isSuperAdmin", "true");
-      localStorage.setItem("userProfile", JSON.stringify(data.user));
+      // Store the super admin token
+      localStorage.setItem('superAdminToken', data.data.token);
+      localStorage.setItem('admin_token', data.data.token); // For compatibility
+      localStorage.setItem('isSuperAdmin', 'true');
+      localStorage.setItem('userProfile', JSON.stringify({
+        user: {
+          id: data.data.admin.id,
+          name: data.data.admin.name,
+          email: data.data.admin.email
+        },
+        token: data.data.token
+      }));
+      localStorage.setItem('admin_profile', JSON.stringify({
+        admin: {
+          id: data.data.admin.id,
+          name: data.data.admin.name,
+          email: data.data.admin.email,
+          admin_type: 'super_admin',
+          role: 'super_admin'
+        },
+        token: data.data.token
+      }));
       
       toast({
         title: "Login successful",
@@ -55,8 +73,9 @@ const SuperAdminLogin = () => {
       });
       
       navigate("/superadmin");
-    } catch (err) {
-      setError("Invalid super admin credentials");
+    } catch (err: any) {
+      console.error('Super admin login error:', err);
+      setError(err.message || "Invalid super admin credentials");
     } finally {
       setIsLoading(false);
     }
@@ -145,11 +164,26 @@ const SuperAdminLogin = () => {
               </div>
             </div>
 
-            {/* <div className="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg">
-              <strong>Demo Credentials:</strong><br />
-              Email: superadmin@admin.com<br />
-              Password: superadmin123
-            </div> */}
+            <div className="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <strong>For Database Setup:</strong><br />
+                  Create super admin user manually in MongoDB
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCredentials({
+                    email: 'superadmin@admin.com',
+                    password: 'SuperAdmin123!'
+                  })}
+                  className="text-xs"
+                >
+                  Demo Credentials
+                </Button>
+              </div>
+            </div>
           </CardContent>
 
           <CardFooter>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { GitCompare } from "lucide-react";
+import { GitCompare, XCircle } from "lucide-react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { useAuth } from "@/providers/AuthProvider";
 import { useToast } from "@/hooks/use-toast";
@@ -18,9 +18,7 @@ import {
 } from "@/services/savedPrompts";
 // streaming handled via hook now
 import {
-  ModelKey,
   modelIcon,
-  keyToBackend,
 } from "@/components/chat/model-selector";
 import { ChatSidebar } from "@/components/chat/sidebar";
 import { FileManagerDialog } from "@/components/chat/file-manager-dialog";
@@ -50,15 +48,25 @@ interface ChatThread {
   model?: string;
 }
 
-const MODEL_INFO: Record<ModelKey, { intro: string; suggestions: string[] }> = {
-  Gemma: {
-    intro: "Gemma excels at reasoning & structured generation.",
-    suggestions: ["Explain this algorithm step by step"],
-  },
-  Phi: {
-    intro: "Phi is lightweight and great for quick iterative coding tasks.",
-    suggestions: ["Create a simple Express route"],
-  },
+// Helper function to get model intro and suggestions
+const getModelInfo = (modelName: string) => {
+  const lowerName = modelName.toLowerCase();
+  if (lowerName.includes('gemma')) {
+    return {
+      intro: "Gemma excels at reasoning & structured generation.",
+      suggestions: ["Explain this algorithm step by step"]
+    };
+  } else if (lowerName.includes('phi')) {
+    return {
+      intro: "Phi is lightweight and great for quick iterative coding tasks.",
+      suggestions: ["Create a simple Express route"]
+    };
+  } else {
+    return {
+      intro: "This model is great for general AI tasks.",
+      suggestions: ["Help me with coding", "Explain this concept"]
+    };
+  }
 };
 
 const Chat: React.FC = () => {
@@ -78,7 +86,7 @@ const Chat: React.FC = () => {
   // isStreaming managed inside useChatMessaging
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
-  const [selectedModel, setSelectedModel] = useState<ModelKey>("Gemma");
+  const [selectedModel, setSelectedModel] = useState<string>("gemma:2b"); // Default to gemma:2b
   const [compareMode, setCompareMode] = useState(false);
   const [suggestionSearch, setSuggestionSearch] = useState("");
   const [chatSearch, setChatSearch] = useState("");
@@ -449,7 +457,7 @@ const Chat: React.FC = () => {
     }
   };
 
-  const filteredSuggestions = MODEL_INFO[selectedModel].suggestions.filter(
+  const filteredSuggestions = getModelInfo(selectedModel).suggestions.filter(
     (s) => s.toLowerCase().includes(suggestionSearch.toLowerCase())
   );
 
@@ -579,43 +587,71 @@ const Chat: React.FC = () => {
             <div className="relative min-h-full">
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center space-y-6 max-w-2xl mx-auto">
-                  <div className="flex flex-col items-center space-y-3">
-                    <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
-                      {modelIcon(selectedModel)}
-                    </div>
-                    <h3 className="text-xl font-semibold">
-                      {selectedModel} Ready
-                    </h3>
-                    <p className="text-muted-foreground text-sm">
-                      {MODEL_INFO[selectedModel].intro}
-                    </p>
-                  </div>
-
-                  <div className="w-full space-y-3">
-                    <input
-                      type="text"
-                      value={suggestionSearch}
-                      onChange={(e) => setSuggestionSearch(e.target.value)}
-                      placeholder="Search suggestions..."
-                      className="w-full px-3 py-2 text-sm border rounded-md bg-background"
-                    />
-                    <div className="flex flex-wrap gap-2 justify-center">
-                      {filteredSuggestions.map((prompt) => (
-                        <button
-                          key={prompt}
-                          className="btn btn-outline btn-sm text-xs"
-                          onClick={() => setMessage(prompt)}
-                        >
-                          {prompt}
-                        </button>
-                      ))}
-                      {filteredSuggestions.length === 0 && (
-                        <p className="text-xs text-muted-foreground">
-                          No suggestions found.
+                  {/* Show error state if there's an error */}
+                  {status === "error" ? (
+                    <div className="flex flex-col items-center space-y-4">
+                      <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center">
+                        <XCircle className="h-8 w-8 text-destructive" />
+                      </div>
+                      <h3 className="text-xl font-semibold text-destructive">
+                        Something went wrong
+                      </h3>
+                      <div className="text-muted-foreground text-sm max-w-md space-y-2">
+                        <p>
+                          There was an error processing your request. This could be due to:
                         </p>
-                      )}
+                        <ul className="text-left space-y-1">
+                          <li>• Model server connection issues</li>
+                          <li>• Invalid model selection</li>
+                          <li>• Network connectivity problems</li>
+                        </ul>
+                        <p>
+                          Try selecting a different model or refreshing the page.
+                        </p>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    /* Normal ready state */
+                    <>
+                      <div className="flex flex-col items-center space-y-3">
+                        <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
+                          {modelIcon(selectedModel)}
+                        </div>
+                        <h3 className="text-xl font-semibold">
+                          {selectedModel} Ready
+                        </h3>
+                        <p className="text-muted-foreground text-sm">
+                          {getModelInfo(selectedModel).intro}
+                        </p>
+                      </div>
+
+                      <div className="w-full space-y-3">
+                        <input
+                          type="text"
+                          value={suggestionSearch}
+                          onChange={(e) => setSuggestionSearch(e.target.value)}
+                          placeholder="Search suggestions..."
+                          className="w-full px-3 py-2 text-sm border rounded-md bg-background"
+                        />
+                        <div className="flex flex-wrap gap-2 justify-center">
+                          {filteredSuggestions.map((prompt) => (
+                            <button
+                              key={prompt}
+                              className="btn btn-outline btn-sm text-xs"
+                              onClick={() => setMessage(prompt)}
+                            >
+                              {prompt}
+                            </button>
+                          ))}
+                          {filteredSuggestions.length === 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              No suggestions found.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               ) : (
                 <MessagesPane

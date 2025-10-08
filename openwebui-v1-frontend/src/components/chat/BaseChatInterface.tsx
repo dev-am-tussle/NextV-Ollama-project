@@ -1,176 +1,23 @@
-import React, { useEffect } from "react";import React, { useEffect } from "react";import React, { useEffect } from "react";import React, { useEffect } from "react";import React, { useEffect } from "react";import React, { useState, useEffect, useMemo, useRef } from "react";
-
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { GitCompare, XCircle } from "lucide-react";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
-
-import { getCurrentUserType } from "@/services/unifiedAuth";import { useNavigate } from "react-router-dom";
-
-import UserChat from "./UserChat";
-
-import { getCurrentUserType } from "@/services/unifiedAuth";import { useNavigate } from "react-router-dom";
-
-/**
-
- * Legacy Chat component - redirects to appropriate chat interface based on user typeimport UserChat from "./UserChat";
-
- * This maintains backward compatibility while enabling separate user/admin experiences
-
- */import { getCurrentUserType } from "@/services/unifiedAuth";import { useNavigate } from "react-router-dom";
-
-const Chat: React.FC = () => {
-
-  const navigate = useNavigate();// Legacy Chat component - redirects to appropriate chat interface based on user type
-
-
-
-  useEffect(() => {const Chat: React.FC = () => {import UserChat from "./UserChat";
-
-    // Check user type from localStorage and redirect accordingly
-
-    const userType = getCurrentUserType();  const navigate = useNavigate();
-
-    
-
-    if (userType === 'admin') {import { getCurrentUserType } from "@/services/unifiedAuth";import { useNavigate } from "react-router-dom";import { GitCompare, XCircle } from "lucide-react";
-
-      // Redirect admin users to admin chat interface
-
-      navigate('/admin/chat', { replace: true });  useEffect(() => {
-
-    } else if (userType === 'user') {
-
-      // Redirect regular users to user chat interface    // Check user type and redirect to appropriate chat interface// Legacy Chat component - redirects to appropriate chat interface based on user type
-
-      navigate('/user/chat', { replace: true });
-
-    }    const userType = getCurrentUserType();
-
-    // If no user type detected, component will render UserChat as fallback
-
-  }, [navigate]);    const Chat: React.FC = () => {import UserChat from "./UserChat";
-
-
-
-  // Fallback to UserChat for backward compatibility    if (userType === 'admin') {
-
-  return <UserChat />;
-
-};      navigate('/admin/chat', { replace: true });  const navigate = useNavigate();
-
-
-
-export default Chat;    } else if (userType === 'user') {
-
-      navigate('/user/chat', { replace: true });import { getCurrentUserType } from "@/services/unifiedAuth";import { SidebarProvider } from "@/components/ui/sidebar";
-
-    } else {
-
-      // No user type detected, use default user chat  useEffect(() => {
-
-      // This maintains backward compatibility
-
-    }    // Check user type and redirect to appropriate chat interface// Legacy Chat component - redirects to appropriate chat interface based on user type
-
-  }, [navigate]);
-
-    const userType = getCurrentUserType();
-
-  // Fallback to UserChat if no redirect happens
-
-  return <UserChat />;    const Chat: React.FC = () => {import UserChat from "./UserChat";import { useAuth } from "@/providers/AuthProvider";
-
-};
-
-    if (userType === 'admin') {
-
-export default Chat;
-      navigate('/admin/chat', { replace: true });  const navigate = useNavigate();
-
-    } else if (userType === 'user') {
-
-      navigate('/user/chat', { replace: true });import { useToast } from "@/hooks/use-toast";
-
-    } else {
-
-      // No user type detected, use default user chat  useEffect(() => {
-
-      // This maintains backward compatibility
-
-    }    // Check user type and redirect to appropriate chat interface// Legacy Chat component - redirects to appropriate chat interface based on user typeimport { useNavigate } from "react-router-dom";
-
-  }, [navigate]);
-
-    const userType = getCurrentUserType();
-
-  // Fallback to UserChat if no redirect happens
-
-  return <UserChat />;    const Chat: React.FC = () => {import {
-
-};
-
-    if (userType === 'admin') {
-
-export default Chat;
-      navigate('/admin/chat', { replace: true });  const navigate = useNavigate();  listConversations,
-
-    } else if (userType === 'user') {
-
-      navigate('/user/chat', { replace: true });  createConversation,
-
-    } else {
-
-      // No user type detected, use default user chat  useEffect(() => {  getMessages as fetchMessages,
-
-      // This maintains backward compatibility
-
-    }    // Check user type and redirect to appropriate chat interface  postMessage,
-
-  }, [navigate]);
-
-    const userType = getCurrentUserType();  deleteConversation,
-
-  // Fallback to UserChat if no redirect happens
-
-  return <UserChat />;    } from "@/services/conversation";
-
-};
-
-    if (userType === 'admin') {import {
-
-export default Chat;
-      navigate('/admin/chat', { replace: true });  createSavedPrompt,
-
-    } else if (userType === 'user') {  deleteSavedPrompt,
-
-      navigate('/user/chat', { replace: true });  updateSavedPrompt,
-
-    } else {} from "@/services/savedPrompts";
-
-      // No user type detected, use default user chat// streaming handled via hook now
-
-      // This maintains backward compatibilityimport {
-
-    }  modelIcon,
-
-  }, [navigate]);} from "@/components/chat/model-selector";
-
+import { modelIcon } from "@/components/chat/model-selector";
 import { ChatSidebar } from "@/components/chat/sidebar";
-
-  // Fallback to UserChat if no redirect happensimport { FileManagerDialog } from "@/components/chat/file-manager-dialog";
-
-  return <UserChat />;import { PromptsDialog, PromptItem } from "@/components/chat/prompts-dialog";
-
-};import { SettingsDialog } from "@/components/chat/settings-dialog";
-
+import { FileManagerDialog } from "@/components/chat/file-manager-dialog";
+import { PromptsDialog, PromptItem } from "@/components/chat/prompts-dialog";
+import { SettingsDialog } from "@/components/chat/settings-dialog";
 import { PreferencesDialog } from "@/components/chat/preferences-dialog";
-
-export default Chat;import { ChatHeader } from "@/components/chat/ChatHeader";
+import { ChatHeader } from "@/components/chat/ChatHeader";
 import { MessagesPane } from "@/components/chat/MessagesPane";
 import { Composer } from "@/components/chat/Composer";
 import { useChatMessaging } from "@/hooks/useChatMessaging";
 import { ChatStatusBar } from "@/components/chat/ChatStatusBar";
 import ChatGeneratingOverlay from "@/components/chat/ChatGeneratingOverlay";
+import { ChatServiceInterface, UserType, getModelSuggestions } from "@/services/chatService";
 
-interface Message {
+export interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
@@ -178,7 +25,7 @@ interface Message {
   modelName?: string;
 }
 
-interface ChatThread {
+export interface ChatThread {
   id: string;
   title: string;
   messages: Message[];
@@ -186,60 +33,54 @@ interface ChatThread {
   model?: string;
 }
 
-// Helper function to get model intro and suggestions
-const getModelInfo = (modelName: string) => {
-  const lowerName = modelName.toLowerCase();
-  if (lowerName.includes('gemma')) {
-    return {
-      intro: "Gemma excels at reasoning & structured generation.",
-      suggestions: ["Explain this algorithm step by step"]
-    };
-  } else if (lowerName.includes('phi')) {
-    return {
-      intro: "Phi is lightweight and great for quick iterative coding tasks.",
-      suggestions: ["Create a simple Express route"]
-    };
-  } else {
-    return {
-      intro: "This model is great for general AI tasks.",
-      suggestions: ["Help me with coding", "Explain this concept"]
-    };
-  }
-};
+interface BaseChatInterfaceProps {
+  userType: UserType;
+  chatService: ChatServiceInterface;
+  user: any;
+  isAuthenticated: boolean;
+  loading: boolean;
+  savedPrompts: any[];
+  refreshSavedPrompts: () => Promise<void>;
+  onSignOut: () => Promise<void>;
+  headerTitle?: string;
+  defaultModel?: string;
+}
 
-import React, { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { getCurrentUserType } from "@/services/unifiedAuth";
-import UserChat from "./UserChat";
-
-// Legacy Chat component - redirects to appropriate chat interface based on user type
-const Chat: React.FC = () => {
+const BaseChatInterface: React.FC<BaseChatInterfaceProps> = ({
+  userType,
+  chatService,
+  user,
+  isAuthenticated,
+  loading,
+  savedPrompts: authSavedPrompts,
+  refreshSavedPrompts,
+  onSignOut,
+  headerTitle,
+  defaultModel = "gemma:2b"
+}) => {
+  const { toast } = useToast();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    // Check user type and redirect to appropriate chat interface
-    const userType = getCurrentUserType();
-    
-    if (userType === 'admin') {
-      navigate('/admin/chat', { replace: true });
-    } else if (userType === 'user') {
-      navigate('/user/chat', { replace: true });
-    } else {
-      // No user type detected, use default user chat
-      // This maintains backward compatibility
-    }
-  }, [navigate]);
+  const [message, setMessage] = useState("");
+  const [threads, setThreads] = useState<ChatThread[]>([]);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string>(defaultModel);
+  const [compareMode, setCompareMode] = useState(false);
+  const [suggestionSearch, setSuggestionSearch] = useState("");
+  const [chatSearch, setChatSearch] = useState("");
+  const [isFileManagerOpen, setIsFileManagerOpen] = useState(false);
+  const [isPromptsOpen, setIsPromptsOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
+  const [fileSearch, setFileSearch] = useState("");
+  const [promptSearch, setPromptSearch] = useState("");
+  const [compactMode, setCompactMode] = useState(false);
 
-  // Fallback to UserChat if no redirect happens
-  return <UserChat />;
-};
-
-  // Load conversations only after auth is initialized and user is authenticated
+  // Load conversations
   useEffect(() => {
-    if (loading) return; // wait until auth init completes
+    if (loading) return;
     if (!isAuthenticated) return;
 
-    // Helper to normalize any possible shape of title coming from backend or accidental object assignment
     const normalizeTitle = (raw: unknown): string => {
       if (typeof raw === "string") return raw.trim() || "New Chat";
       if (raw == null) return "New Chat";
@@ -247,7 +88,6 @@ const Chat: React.FC = () => {
         const r = raw as Record<string, unknown>;
         if (typeof r.title === "string") return r.title || "New Chat";
         if (typeof r.name === "string") return r.name || "New Chat";
-        // Last resort stringify (avoid huge strings)
         try {
           const json = JSON.stringify(raw);
           return json.length > 60 ? json.slice(0, 57) + "..." : json;
@@ -261,7 +101,7 @@ const Chat: React.FC = () => {
     let mounted = true;
     (async () => {
       try {
-        const convs = (await listConversations(50)) as unknown;
+        const convs = await chatService.listConversations(50);
         if (!mounted) return;
         const mapped = (Array.isArray(convs) ? convs : []).map((c) => {
           const obj = c as Record<string, unknown>;
@@ -275,60 +115,35 @@ const Chat: React.FC = () => {
           };
         });
 
-        // Log any suspicious titles (only in development to avoid noise in prod)
-        if (process.env.NODE_ENV !== "production") {
-          mapped.forEach((m) => {
-            // Heuristic: title that looks like JSON object or default Object toString
-            if (
-              m.title.startsWith("{") ||
-              m.title.startsWith("[object Object")
-            ) {
-              console.warn(
-                "Non-string or object-like conversation title received, normalized to:",
-                m.title
-              );
-            }
-          });
-        }
-        // Set the threads list but do NOT auto-select an existing conversation.
-        // This ensures all users (new or existing) see the "new chat" intro
-        // and can choose to resume an existing conversation from the sidebar.
         setThreads(mapped);
 
-        // Restore last active thread from localStorage unless the user just logged in
+        // Restore last active thread for this user type
         try {
+          const storageKey = `lastActiveThreadId_${userType}`;
           const justLoggedIn = localStorage.getItem("authJustLoggedIn");
           if (justLoggedIn) {
-            // clear the flag so subsequent refreshes will restore
             localStorage.removeItem("authJustLoggedIn");
           } else {
-            const last = localStorage.getItem("lastActiveThreadId");
+            const last = localStorage.getItem(storageKey);
             if (last) {
-              // only restore if it exists in mapped list
               const exists = mapped.find((m) => m.id === last);
               if (exists) setActiveThreadId(last);
             }
           }
         } catch (_) {}
       } catch (err) {
-        // ignore
+        console.error(`Error loading ${userType} conversations:`, err);
       }
     })();
     return () => {
       mounted = false;
     };
-    // activeThreadId intentionally omitted: we only want to load conversations once after auth ready
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, isAuthenticated]);
+  }, [loading, isAuthenticated, userType, chatService]);
 
   const activeThread = threads.find((t) => t.id === activeThreadId);
   const messages = activeThread?.messages || [];
 
-  // Create a new local-only thread. Backend conversation will be created when the
-  // user sends the first message in that thread.
   const createNewThread = (title?: string) => {
-    // Guard: if there is already an unsaved local thread (id starts with local-) with no messages
-    // keep user on that thread instead of creating another redundant empty chat
     const existingLocal = threads.find(
       (t) => t.id.startsWith("local-") && t.messages.length === 0
     );
@@ -339,7 +154,6 @@ const Chat: React.FC = () => {
     const id = `local-${Date.now()}`;
     const t: ChatThread = {
       id,
-      // ensure title is always a string (avoid accidental object)
       title: typeof title === "string" ? title : "New Chat",
       messages: [],
       updatedAt: new Date(),
@@ -348,22 +162,20 @@ const Chat: React.FC = () => {
     setThreads((prev) => [t, ...prev]);
     setActiveThreadId(t.id);
     try {
-      localStorage.setItem("lastActiveThreadId", t.id);
+      const storageKey = `lastActiveThreadId_${userType}`;
+      localStorage.setItem(storageKey, t.id);
     } catch (_) {}
   };
 
-  // Fetch messages for a conversation when a persisted (non-local) thread is active
+  // Fetch messages for active thread
   useEffect(() => {
     if (!activeThreadId) return;
-
-    // If this is a local-only thread (created in frontend but not persisted yet),
-    // skip fetching messages from backend until it is persisted.
     if (String(activeThreadId).startsWith("local-")) return;
 
     let mounted = true;
     (async () => {
       try {
-        const msgs = (await fetchMessages(activeThreadId, 200)) as unknown;
+        const msgs = await chatService.getMessages(activeThreadId, 200);
         if (!mounted) return;
         const mapped = (Array.isArray(msgs) ? msgs : []).map((m) => {
           const obj = m as Record<string, unknown>;
@@ -384,16 +196,15 @@ const Chat: React.FC = () => {
           )
         );
       } catch (err) {
-        // ignore
+        console.error(`Error loading ${userType} messages:`, err);
       }
     })();
     return () => {
       mounted = false;
     };
-  }, [activeThreadId]);
+  }, [activeThreadId, chatService, userType]);
 
   const shareCurrentChat = async () => {
-    // share/quick-send current composer text
     await handleSend();
   };
 
@@ -433,14 +244,13 @@ const Chat: React.FC = () => {
     try {
       const title =
         content.length > 50 ? content.slice(0, 47) + "..." : content;
-      await createSavedPrompt(title, content);
+      await chatService.createSavedPrompt(title, content);
 
       toast({
         title: "Prompt Saved",
         description: "Your prompt has been saved successfully!",
       });
 
-      // Refresh saved prompts to show in real-time
       await refreshSavedPrompts();
     } catch (error) {
       console.error("Failed to save prompt:", error);
@@ -452,10 +262,8 @@ const Chat: React.FC = () => {
     }
   };
 
-  // Handle when user selects a saved prompt - fill it into message input
   const handleSelectPrompt = (prompt: PromptItem) => {
     setMessage(prompt.content);
-    // Optionally auto-focus the input field
     setTimeout(() => {
       const textareaElements = document.querySelectorAll("textarea");
       const messageTextarea = Array.from(textareaElements).find(
@@ -467,7 +275,6 @@ const Chat: React.FC = () => {
     }, 100);
   };
 
-  // Handle copying prompt content
   const handleCopyPrompt = async (content: string) => {
     try {
       await navigator.clipboard.writeText(content);
@@ -485,19 +292,17 @@ const Chat: React.FC = () => {
     }
   };
 
-  // Handle editing saved prompt
   const handleEditPrompt = async (
     id: string,
     title: string,
     content: string
   ) => {
     try {
-      await updateSavedPrompt(id, { title, prompt: content });
+      await chatService.updateSavedPrompt(id, { title, prompt: content });
       toast({
         title: "Prompt Updated",
         description: "Your prompt has been updated successfully!",
       });
-      // Refresh saved prompts to show updated content
       await refreshSavedPrompts();
     } catch (error) {
       console.error("Failed to update prompt:", error);
@@ -509,15 +314,13 @@ const Chat: React.FC = () => {
     }
   };
 
-  // Handle deleting saved prompt
   const handleDeletePrompt = async (id: string) => {
     try {
-      await deleteSavedPrompt(id);
+      await chatService.deleteSavedPrompt(id);
       toast({
         title: "Prompt Deleted",
         description: "Your prompt has been deleted successfully!",
       });
-      // Refresh saved prompts to remove from list
       await refreshSavedPrompts();
     } catch (error) {
       console.error("Failed to delete prompt:", error);
@@ -529,13 +332,10 @@ const Chat: React.FC = () => {
     }
   };
 
-  // Handle deleting conversation/chat
   const handleDeleteConversation = async (id: string) => {
-    // Get conversation title for confirmation
     const conversation = threads.find((t) => t.id === id);
     const conversationTitle = conversation?.title || "this chat";
 
-    // Show confirmation dialog
     const confirmed = window.confirm(
       `Are you sure you want to delete "${conversationTitle}"? This action cannot be undone.`
     );
@@ -543,15 +343,13 @@ const Chat: React.FC = () => {
     if (!confirmed) return;
 
     try {
-      // Optimistic update - remove from frontend immediately
       setThreads((prev) => prev.filter((t) => t.id !== id));
       if (activeThreadId === id) {
         setActiveThreadId(null);
       }
 
-      // Only call API if it's a backend conversation (not local)
       if (!id.startsWith("local-")) {
-        await deleteConversation(id);
+        await chatService.deleteConversation(id);
       }
 
       toast({
@@ -560,10 +358,9 @@ const Chat: React.FC = () => {
       });
     } catch (error) {
       console.error("Failed to delete conversation:", error);
-
-      // Revert optimistic update on error
+      
       try {
-        const convs = await listConversations(50);
+        const convs = await chatService.listConversations(50);
         const mapped = (Array.isArray(convs) ? convs : []).map((c) => {
           const obj = c as Record<string, unknown>;
           return {
@@ -577,10 +374,7 @@ const Chat: React.FC = () => {
         });
         setThreads(mapped);
       } catch (revertError) {
-        console.error(
-          "Failed to revert threads after delete error:",
-          revertError
-        );
+        console.error("Failed to revert threads after delete error:", revertError);
       }
 
       toast({
@@ -591,23 +385,20 @@ const Chat: React.FC = () => {
     }
   };
 
-  const filteredSuggestions = getModelInfo(selectedModel).suggestions.filter(
+  const modelInfo = getModelSuggestions(selectedModel, userType);
+  const filteredSuggestions = modelInfo.suggestions.filter(
     (s) => s.toLowerCase().includes(suggestionSearch.toLowerCase())
   );
 
   const prompts: PromptItem[] = useMemo(() => {
-    console.log("[Chat] authSavedPrompts:", authSavedPrompts);
     if (Array.isArray(authSavedPrompts) && authSavedPrompts.length > 0) {
       const mapped = authSavedPrompts.map((p: any, idx: number) => ({
         id: String(p._id || p.id || `ap-${idx}`),
         title: String(p.title || p.name || "Untitled Prompt"),
         content: String(p.content || p.prompt || ""),
       }));
-      console.log("[Chat] Mapped prompts:", mapped);
       return mapped;
     }
-    // No fallback defaults per user request
-    console.log("[Chat] No saved prompts found");
     return [];
   }, [authSavedPrompts]);
 
@@ -616,17 +407,17 @@ const Chat: React.FC = () => {
       p.title.toLowerCase().includes(promptSearch.toLowerCase()) ||
       p.content.toLowerCase().includes(promptSearch.toLowerCase())
   );
+  
   const filteredThreads = threads.filter((t) =>
     String(t?.title || "")
       .toLowerCase()
       .includes(chatSearch.toLowerCase())
   );
 
-  // Scroll management for messages
+  // Scroll management
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const bottomAnchorRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    // Auto-scroll on new message append (when user or assistant messages length changes)
     bottomAnchorRef.current?.scrollIntoView({
       behavior: "smooth",
       block: "end",
@@ -639,9 +430,7 @@ const Chat: React.FC = () => {
         <ChatSidebar
           threads={filteredThreads.map((t) => ({
             id: t.id,
-            // ensure title is a string
-            title:
-              typeof t.title === "string" ? t.title || "New Chat" : "New Chat",
+            title: typeof t.title === "string" ? t.title || "New Chat" : "New Chat",
             updatedAt: t.updatedAt,
             messagesCount: t.messages.length,
           }))}
@@ -649,7 +438,8 @@ const Chat: React.FC = () => {
           onSelect={(id: string) => {
             setActiveThreadId(id);
             try {
-              localStorage.setItem("lastActiveThreadId", id);
+              const storageKey = `lastActiveThreadId_${userType}`;
+              localStorage.setItem(storageKey, id);
             } catch (_) {}
           }}
           onNew={createNewThread}
@@ -680,23 +470,12 @@ const Chat: React.FC = () => {
           onOpenPrompts={() => setIsPromptsOpen(true)}
           onOpenSettings={() => setIsSettingsOpen(true)}
           user={user}
-          onSignOut={async () => {
-            try {
-              await signout();
-              toast({
-                title: "Signed out",
-                description: "You have been signed out.",
-              });
-            } catch (_) {
-              toast({ title: "Sign out", description: "Sign out completed." });
-            }
-          }}
+          onSignOut={onSignOut}
         />
 
         <div className="flex-1 flex flex-col min-h-0">
           <ChatHeader
-            // ensure title is a string to prevent React rendering objects
-            title={String(activeThread?.title || "New Chat")}
+            title={headerTitle || String(activeThread?.title || "New Chat")}
             selectedModel={selectedModel}
             onSelectModel={setSelectedModel}
             compareMode={compareMode}
@@ -706,7 +485,6 @@ const Chat: React.FC = () => {
             onOpenPreferences={() => setIsPreferencesOpen(true)}
           />
 
-          {/* Scrollable messages region only */}
           <div
             ref={scrollRef}
             className="flex-1 min-h-0 overflow-y-auto p-6 relative custom-scrollbar"
@@ -721,7 +499,6 @@ const Chat: React.FC = () => {
             <div className="relative min-h-full">
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center space-y-6 max-w-2xl mx-auto">
-                  {/* Show error state if there's an error */}
                   {status === "error" ? (
                     <div className="flex flex-col items-center space-y-4">
                       <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center">
@@ -731,21 +508,11 @@ const Chat: React.FC = () => {
                         Something went wrong
                       </h3>
                       <div className="text-muted-foreground text-sm max-w-md space-y-2">
-                        <p>
-                          There was an error processing your request. This could be due to:
-                        </p>
-                        <ul className="text-left space-y-1">
-                          <li>• Model server connection issues</li>
-                          <li>• Invalid model selection</li>
-                          <li>• Network connectivity problems</li>
-                        </ul>
-                        <p>
-                          Try selecting a different model or refreshing the page.
-                        </p>
+                        <p>There was an error processing your request.</p>
+                        <p>Try selecting a different model or refreshing the page.</p>
                       </div>
                     </div>
                   ) : (
-                    /* Normal ready state */
                     <>
                       <div className="flex flex-col items-center space-y-3">
                         <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
@@ -755,7 +522,7 @@ const Chat: React.FC = () => {
                           {selectedModel} Ready
                         </h3>
                         <p className="text-muted-foreground text-sm">
-                          {getModelInfo(selectedModel).intro}
+                          {modelInfo.intro}
                         </p>
                       </div>
 
@@ -796,14 +563,8 @@ const Chat: React.FC = () => {
                     sender: m.role === "user" ? "user" : "assistant",
                     createdAt: m.timestamp,
                     modelName: m.modelName,
-                    // flags may already exist on underlying message objects if they were added by hook
-                    // (Type assertion defensive merge)
-                    ...((m as any).isSkeleton
-                      ? { isSkeleton: (m as any).isSkeleton }
-                      : {}),
-                    ...((m as any).isStreaming
-                      ? { isStreaming: (m as any).isStreaming }
-                      : {}),
+                    ...((m as any).isSkeleton ? { isSkeleton: (m as any).isSkeleton } : {}),
+                    ...((m as any).isStreaming ? { isStreaming: (m as any).isStreaming } : {}),
                   }))}
                   userId={user?.id}
                   onSavePrompt={handleSavePrompt}
@@ -813,18 +574,13 @@ const Chat: React.FC = () => {
               <ChatGeneratingOverlay
                 active={
                   isStreaming ||
-                  [
-                    "creating-conversation",
-                    "streaming-assistant",
-                    "finalizing",
-                  ].includes(status)
+                  ["creating-conversation", "streaming-assistant", "finalizing"].includes(status)
                 }
                 status={status}
               />
             </div>
           </div>
 
-          {/* Fixed bottom input + status bar (outside scroll area) */}
           <div className="shrink-0 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75">
             <Composer
               onSend={async (text) => await handleSend(text)}
@@ -879,6 +635,7 @@ const Chat: React.FC = () => {
           }
         })()}
       />
+      
       <PromptsDialog
         open={isPromptsOpen}
         onOpenChange={setIsPromptsOpen}
@@ -890,6 +647,7 @@ const Chat: React.FC = () => {
         onEdit={handleEditPrompt}
         onDelete={handleDeletePrompt}
       />
+      
       <SettingsDialog
         open={isSettingsOpen}
         onOpenChange={setIsSettingsOpen}
@@ -898,6 +656,7 @@ const Chat: React.FC = () => {
         compareMode={compareMode}
         onToggleCompare={() => setCompareMode((c) => !c)}
       />
+      
       <PreferencesDialog
         open={isPreferencesOpen}
         onOpenChange={setIsPreferencesOpen}
@@ -906,4 +665,4 @@ const Chat: React.FC = () => {
   );
 };
 
-export default Chat;
+export default BaseChatInterface;

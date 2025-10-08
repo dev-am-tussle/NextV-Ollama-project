@@ -18,6 +18,7 @@ import {
   CheckCircle,
   AlertCircle
 } from "lucide-react";
+  import { CircleLoader } from "@/components/ui/loader";
 import { useToast } from "@/hooks/use-toast";
 import { fetchOrganizations, deleteOrganization, type OrganizationWithStats } from "@/services/organizationManagement";
 import AddOrganizationDialog from "@/components/admin/AddOrganizationDialog";

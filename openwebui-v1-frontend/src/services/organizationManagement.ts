@@ -183,7 +183,16 @@ export const fetchOrganizationEmployees = async (organizationId: string, page = 
 
 // Model Management Functions
 export const fetchAvailableModels = async () => {
+  console.log('📞 Calling API: /api/super-admin/organizations/available-models');
   return adminApiFetch('/api/super-admin/organizations/available-models');
+};
+
+export const seedAvailableModels = async (force = false) => {
+  console.log('📞 Calling API: /api/super-admin/organizations/seed-models');
+  return adminApiFetch('/api/super-admin/organizations/seed-models', {
+    method: 'POST',
+    body: JSON.stringify({ force }),
+  });
 };
 
 export const fetchOrganizationModels = async (organizationId: string) => {

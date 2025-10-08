@@ -60,12 +60,19 @@ const Login = () => {
         const response = await unifiedLogin(email, password, 'admin');
         
         if (response.success) {
-          // Navigate based on admin type
-          navigate(response.data.redirectTo);
           toast({
             title: "Welcome back, Admin!",
             description: "You have been successfully logged in.",
           });
+          
+          // Get organization slug for redirect
+          const orgSlug = response.data.organization?.slug;
+          const redirectPath = orgSlug ? `/${orgSlug}/org-admin` : '/admin/chat';
+          
+          // Small delay to ensure localStorage is set, then navigate
+          setTimeout(() => {
+            navigate(redirectPath);
+          }, 100);
         }
       } else {
         // Use existing user login
@@ -84,11 +91,16 @@ const Login = () => {
           return false;
         };
         await waitForProfile(2000);
-        navigate("/");
+        
         toast({
           title: "Welcome back!",
           description: "You have been successfully logged in.",
         });
+        
+        // Small delay to ensure everything is set, then navigate
+        setTimeout(() => {
+          navigate("/user/chat");
+        }, 100);
       }
     } catch (error: any) {
       toast({

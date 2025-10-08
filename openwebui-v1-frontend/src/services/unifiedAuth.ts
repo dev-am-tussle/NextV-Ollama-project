@@ -37,6 +37,7 @@ export interface LoginResponse {
     organization?: {
       id: string;
       name: string;
+      slug?: string;
       status: string;
       subscription: any;
     };
@@ -73,6 +74,7 @@ export interface ProfileResponse {
     organization?: {
       id: string;
       name: string;
+      slug?: string;
       status: string;
       subscription: any;
       settings: any;

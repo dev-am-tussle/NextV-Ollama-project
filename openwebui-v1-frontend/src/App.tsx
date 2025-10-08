@@ -11,13 +11,17 @@ import { Footer } from "@/components/Footer";
 import Home from "./pages/Home";
 import Login from "./pages/auth/Login";
 import Signup from "./pages/auth/Signup";
-import Chat from "./pages/Chat";
+import UserChat from "./pages/UserChat";
+import AdminChat from "./pages/AdminChat";
+import LegacyRedirect from "@/components/routing/LegacyRedirect";
 import ProtectedRoute from "@/components/routing/ProtectedRoute";
 import SuperAdminProtectedRoute from "@/components/routing/SuperAdminProtectedRoute";
 import NotFound from "./pages/NotFound";
 import { Admin } from "./pages/admin/Admin";
 import SuperAdmin from "./pages/supadmin/SuperAdmin";
 import { initializeBrandingSettings } from "@/services/adminSettings";
+import { CircleLoader } from "@/components/ui/loader";
+import OrgAdmin from "./pages/admin/OrgAdmin";
 
 // Lazy load SuperAdminLogin
 const SuperAdminLogin = lazy(() => import("./pages/supadmin/SuperAdminLogin"));
@@ -27,10 +31,10 @@ const queryClient = new QueryClient();
 const AppContent = () => {
   const location = useLocation();
   // hide footer on auth pages (login, signup and any /auth/* routes)
-  const hideFooter = location.pathname.startsWith("/auth") || location.pathname === "/" || location.pathname.startsWith("/admin") || location.pathname.startsWith("/superadmin");
+  const hideFooter = location.pathname.startsWith("/auth") || location.pathname === "/" || location.pathname.startsWith("/admin") || location.pathname.startsWith("/superadmin") || location.pathname.includes("/org-admin");
   // Also hide header on auth pages to avoid any timing issues
   const hideHeader =
-    location.pathname.startsWith("/auth") || location.pathname === "/" || location.pathname.startsWith("/admin") || location.pathname.startsWith("/superadmin");
+    location.pathname.startsWith("/auth") || location.pathname === "/" || location.pathname.startsWith("/admin") || location.pathname.startsWith("/superadmin") || location.pathname.includes("/org-admin");
 
   return (
     <div className="min-h-screen flex flex-col w-full">
@@ -40,14 +44,37 @@ const AppContent = () => {
           <Route path="/home" element={<Home />} />
           <Route path="/auth/login" element={<Login />} />
           <Route path="/auth/signup" element={<Signup />} />
+          
+          {/* User Chat Route */}
+          <Route
+            path="/user/chat"
+            element={
+              <ProtectedRoute>
+                <UserChat />
+              </ProtectedRoute>
+            }
+          />
+          
+          {/* Admin Chat Route */}
+          <Route
+            path="/admin/chat"
+            element={
+              <ProtectedRoute>
+                <AdminChat />
+              </ProtectedRoute>
+            }
+          />
+          
+          {/* Legacy Chat Route - smart redirect based on user type */}
           <Route
             path="/"
             element={
               <ProtectedRoute>
-                <Chat />
+                <LegacyRedirect />
               </ProtectedRoute>
             }
           />
+          
           <Route
             path="/admin/*"
             element={
@@ -56,9 +83,17 @@ const AppContent = () => {
               </ProtectedRoute>
             }
           />
-          
+          <Route
+            path="/:slug/org-admin"
+            element={
+              <ProtectedRoute>
+                <OrgAdmin />
+              </ProtectedRoute>
+            }
+          />
+           
           <Route path="/superadmin/auth/login" element={
-            <React.Suspense fallback={<div>Loading...</div>}>
+            <React.Suspense fallback={<div className="py-10"><CircleLoader label="Loading view" showLabel /></div>}>
               <SuperAdminLogin />
             </React.Suspense>
           } />

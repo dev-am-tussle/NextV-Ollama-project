@@ -20,9 +20,12 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Shuffle, Eye, EyeOff, Plus, X } from "lucide-react";
+import { Shuffle, Eye, EyeOff, Plus, X, Check, Search, ChevronDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { createOrganization, updateOrganization, type CreateOrganizationData, type OrganizationWithStats } from "@/services/organizationManagement";
+import { createOrganization, updateOrganization, type CreateOrganizationData, type OrganizationWithStats, fetchAvailableModels, assignModelsToOrganization, seedAvailableModels } from "@/services/organizationManagement";
+import { CircleLoader } from "@/components/ui/loader";
+import { cn } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface Admin {
   name: string;
@@ -47,7 +50,12 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
 }) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState<{[key: number]: boolean}>({});
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [availableModels, setAvailableModels] = useState<any[]>([]);
+  const [selectedModelIds, setSelectedModelIds] = useState<string[]>([]);
+  const [modelSearchOpen, setModelSearchOpen] = useState(false);
+  const [modelSearchQuery, setModelSearchQuery] = useState('');
+  const [showPassword, setShowPassword] = useState<{ [key: number]: boolean }>({});
   const [admins, setAdmins] = useState<Admin[]>([
     { name: "", email: "", password: "" }
   ]);
@@ -126,12 +134,97 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
           features: { ...organization.settings.features },
         },
       }));
+      // Pre-select existing allowed models in edit mode
+      const existing = organization.settings.allowed_models?.map(m => m.model_id) || [];
+      setSelectedModelIds(existing);
     } else if (mode === 'create' && open) {
       // reset when opening create dialog
       resetForm();
     }
+    // Load models when dialog opens
+    if (open) {
+      loadAvailableModels();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, organization, open]);
+
+  const loadAvailableModels = async () => {
+    try {
+      setModelsLoading(true);
+      console.log('🔄 Loading available models...');
+      const res = await fetchAvailableModels();
+      console.log('📦 Models response:', res);
+      if (res.success) {
+        const models = res.models || res.data || [];
+        console.log('✅ Loaded models:', models);
+        setAvailableModels(models);
+      } else {
+        console.error('❌ Failed to load models:', res);
+      }
+    } catch (e) {
+      console.error('❌ Failed to load models (exception):', e);
+    } finally {
+      setModelsLoading(false);
+    }
+  };
+
+  const handleSeedModels = async () => {
+    try {
+      setModelsLoading(true);
+      console.log('🌱 Seeding models...');
+      const res = await seedAvailableModels(false); // Don't force by default
+      console.log('🌱 Seed response:', res);
+      
+      if (res.success) {
+        toast({
+          title: "Success",
+          description: `Successfully seeded ${res.data?.length || 0} models`,
+        });
+        // Reload models after seeding
+        await loadAvailableModels();
+      } else {
+        // If models already exist, ask user if they want to replace them
+        if (res.existing_count > 0) {
+          const shouldForce = confirm(`${res.existing_count} models already exist. Do you want to replace them with fresh seed data?`);
+          if (shouldForce) {
+            const forceRes = await seedAvailableModels(true);
+            if (forceRes.success) {
+              toast({
+                title: "Success",
+                description: `Successfully replaced with ${forceRes.data?.length || 0} fresh models`,
+              });
+              await loadAvailableModels();
+            } else {
+              toast({
+                title: "Error",
+                description: forceRes.error || "Failed to seed models",
+                variant: "destructive",
+              });
+            }
+          }
+        } else {
+          toast({
+            title: "Error",
+            description: res.error || "Failed to seed models",
+            variant: "destructive",
+          });
+        }
+      }
+    } catch (e) {
+      console.error('❌ Failed to seed models:', e);
+      toast({
+        title: "Error",
+        description: "Failed to seed models",
+        variant: "destructive",
+      });
+    } finally {
+      setModelsLoading(false);
+    }
+  };
+
+  const toggleModelSelection = (id: string) => {
+    setSelectedModelIds(prev => prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]);
+  };
 
   const generatePassword = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%&*';
@@ -195,12 +288,12 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
       setFormData(prev => {
         const updated = { ...prev };
         let current = updated;
-        
+
         for (let i = 0; i < keys.length - 1; i++) {
           current = current[keys[i]] = { ...current[keys[i]] };
         }
         current[keys[keys.length - 1]] = value;
-        
+
         return updated;
       });
     } else {
@@ -256,7 +349,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.name.trim()) {
       toast({
         title: "Validation Error",
@@ -298,12 +391,12 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
 
     if (mode === 'create') {
       // Validate at least one admin only in create mode
-      validAdmins = admins.filter(admin => 
+      validAdmins = admins.filter(admin =>
         admin.name.trim() && admin.email.trim() && admin.password.trim() && admin.password.length >= 8
       );
       if (validAdmins.length === 0) {
         toast({
-          title: "Validation Error", 
+          title: "Validation Error",
           description: "At least one admin with complete details is required",
           variant: "destructive",
         });
@@ -326,12 +419,17 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
     setLoading(true);
     try {
       if (mode === 'create') {
-        const response = await createOrganization(submissionData);
+        // include model ids in initial creation
+        const response = await createOrganization({ ...submissionData, model_ids: selectedModelIds } as any);
         if (response.success) {
           toast({
             title: "Success",
             description: `Organization created successfully with ${validAdmins.length} admin(s)`,
           });
+          // Optionally assign models endpoint if backend expects separate call
+          if (selectedModelIds.length && !response.data?.settings?.allowed_models?.length) {
+            try { await assignModelsToOrganization(response.data._id, selectedModelIds); } catch { }
+          }
           resetForm();
           onOpenChange(false);
           if (onSuccess) onSuccess();
@@ -339,12 +437,16 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
       } else if (mode === 'edit' && organization) {
         const updatePayload = {
           name: formData.name,
-            slug: formData.slug,
-            description: formData.description,
-            settings: formData.settings,
+          slug: formData.slug,
+          description: formData.description,
+          settings: formData.settings,
         };
         const response = await updateOrganization(organization._id, updatePayload as any);
         if (response.success) {
+          // Assign / update models after edit
+          if (selectedModelIds) {
+            try { await assignModelsToOrganization(organization._id, selectedModelIds); } catch (e) { console.warn('Model assign failed', e); }
+          }
           toast({
             title: "Success",
             description: `Organization updated successfully`,
@@ -356,14 +458,14 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
     } catch (error: any) {
       console.error("Organization submit error:\n", error);
       let errorMessage = mode === 'edit' ? 'Failed to update organization' : 'Failed to create organization';
-      
+
       // Handle specific error messages from the API
       if (error.response?.data?.error) {
         errorMessage = error.response.data.error;
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
+
       toast({
         title: "Error",
         description: errorMessage,
@@ -383,12 +485,12 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
             Add a new organization to the platform with an admin account and custom settings.
           </DialogDescription>
         </DialogHeader>
-        
+
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Organization Information */}
           <div className="space-y-4">
             <h3 className="text-lg font-medium">Organization Information</h3>
-            
+
             <div className="space-y-2">
               <Label htmlFor="name">Organization Name *</Label>
               <Input
@@ -406,7 +508,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
                 required
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="slug">URL Slug *</Label>
               <Input
@@ -440,7 +542,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
                 </Button>
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
               <Textarea
@@ -457,6 +559,162 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
             </div>
           </div>
 
+          {/* Enhanced Model Assignment Section */}
+          <div className="space-y-4 mt-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-medium">Assign Models</h3>
+              <div className="flex gap-2">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleSeedModels} 
+                  disabled={modelsLoading}
+                  className="text-xs"
+                >
+                  {modelsLoading ? 'Seeding...' : 'Seed Models'}
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={loadAvailableModels} disabled={modelsLoading}>
+                  {modelsLoading ? 'Refreshing...' : 'Refresh'}
+                </Button>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">Select which models this organization can access. These appear as allowed models in org settings.</p>
+
+            {modelsLoading ? (
+              <CircleLoader label="Loading models" />
+            ) : (
+              <div className="space-y-3">
+                {/* Multi-Select Dropdown */}
+                <Popover open={modelSearchOpen} onOpenChange={setModelSearchOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={modelSearchOpen}
+                      className="w-full justify-between text-left font-normal"
+                    >
+                      {selectedModelIds.length === 0 ? (
+                        <span className="text-muted-foreground">Search and select models...</span>
+                      ) : (
+                        <span>{selectedModelIds.length} model(s) selected</span>
+                      )}
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0" align="start">
+                    <div className="p-2">
+                      <div className="relative">
+                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Search models..."
+                          value={modelSearchQuery}
+                          onChange={(e) => setModelSearchQuery(e.target.value)}
+                          className="pl-8"
+                        />
+                      </div>
+                    </div>
+                    <div className="max-h-60 overflow-auto border-t">
+                      {availableModels.length === 0 ? (
+                        <div className="p-4 text-center space-y-2">
+                          <p className="text-sm text-muted-foreground">No models available</p>
+                          <Button 
+                            type="button" 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={handleSeedModels}
+                            disabled={modelsLoading}
+                            className="text-xs"
+                          >
+                            Seed Sample Models
+                          </Button>
+                        </div>
+                      ) : (
+                        availableModels
+                          .filter(m =>
+                            !modelSearchQuery ||
+                            (m.display_name || m.name).toLowerCase().includes(modelSearchQuery.toLowerCase()) ||
+                            (m.description || '').toLowerCase().includes(modelSearchQuery.toLowerCase()) ||
+                            (m.size || '').toLowerCase().includes(modelSearchQuery.toLowerCase())
+                          )
+                          .map((model) => {
+                            const isSelected = selectedModelIds.includes(model._id || model.id);
+                            return (
+                              <div
+                                key={model._id || model.id}
+                                className="flex items-center space-x-2 p-2 hover:bg-muted cursor-pointer"
+                                onClick={() => toggleModelSelection(model._id || model.id)}
+                              >
+                                <div className="flex h-4 w-4 items-center justify-center border rounded">
+                                  {isSelected && <Check className="h-3 w-3 text-primary" />}
+                                </div>
+                                <div className="flex-1 space-y-1">
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-sm font-medium">{model.display_name || model.name}</p>
+                                    <Badge variant="outline" className="text-xs">
+                                      {model.size}
+                                    </Badge>
+                                  </div>
+                                  {model.description && (
+                                    <p className="text-xs text-muted-foreground truncate">{model.description}</p>
+                                  )}
+                                  {(model.parameters || model.performance_tier) && (
+                                    <div className="flex gap-1">
+                                      {model.parameters && (
+                                        <Badge variant="secondary" className="text-xs px-1 py-0">
+                                          {model.parameters}
+                                        </Badge>
+                                      )}
+                                      {model.performance_tier && (
+                                        <Badge variant="secondary" className="text-xs px-1 py-0">
+                                          {model.performance_tier}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+
+                {/* Selected Models Display */}
+                {selectedModelIds.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Selected Models ({selectedModelIds.length})</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedModelIds.map((modelId) => {
+                        const model = availableModels.find(m => (m._id || m.id) === modelId);
+                        return (
+                          <Badge
+                            key={modelId}
+                            variant="secondary"
+                            className="px-2 py-1 text-xs flex items-center gap-1"
+                          >
+                            <span>{model?.display_name || model?.name || modelId}</span>
+                            {model?.size && (
+                              <span className="text-muted-foreground">({model.size})</span>
+                            )}
+                            <button
+                              type="button"
+                              className="ml-1 text-muted-foreground hover:text-foreground"
+                              onClick={() => toggleModelSelection(modelId)}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Admin Accounts */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -471,7 +729,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
                 Add Admin
               </Button>
             </div>
-            
+
             <div className="space-y-4">
               {admins.map((admin, index) => (
                 <div key={index} className="p-4 border rounded-lg space-y-4">
@@ -488,7 +746,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
                       </Button>
                     )}
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor={`admin_name_${index}`}>Admin Name *</Label>
@@ -500,7 +758,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
                         required
                       />
                     </div>
-                    
+
                     <div className="space-y-2">
                       <Label htmlFor={`admin_email_${index}`}>Admin Email *</Label>
                       <Input
@@ -513,7 +771,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
                       />
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor={`admin_password_${index}`}>Admin Password *</Label>
                     <div className="relative">
@@ -564,7 +822,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
           {/* Organization Limits */}
           <div className="space-y-4">
             <h3 className="text-lg font-medium">Organization Limits</h3>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="max_users">Maximum Users</Label>
@@ -577,7 +835,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
                   onChange={(e) => handleInputChange('settings.limits.max_users', parseInt(e.target.value))}
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="max_sessions">Max Concurrent Sessions</Label>
                 <Input
@@ -590,7 +848,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
                 />
               </div>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="monthly_limit">Monthly Request Limit</Label>
@@ -603,7 +861,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
                   onChange={(e) => handleInputChange('settings.limits.monthly_request_limit', parseInt(e.target.value))}
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="storage_limit">Storage Limit (MB)</Label>
                 <Input
@@ -621,12 +879,12 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
           {/* Default Employee Settings */}
           <div className="space-y-4">
             <h3 className="text-lg font-medium">Default Employee Settings</h3>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="theme">Default Theme</Label>
-                <Select 
-                  value={formData.settings?.default_employee_settings?.theme || "light"} 
+                <Select
+                  value={formData.settings?.default_employee_settings?.theme || "light"}
                   onValueChange={(value) => handleInputChange('settings.default_employee_settings.theme', value)}
                 >
                   <SelectTrigger>
@@ -638,11 +896,11 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
                   </SelectContent>
                 </Select>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="default_model">Default Model</Label>
-                <Select 
-                  value={formData.settings?.default_employee_settings?.default_model || "gemma:2b"} 
+                <Select
+                  value={formData.settings?.default_employee_settings?.default_model || "gemma:2b"}
                   onValueChange={(value) => handleInputChange('settings.default_employee_settings.default_model', value)}
                 >
                   <SelectTrigger>
@@ -656,7 +914,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
                 </Select>
               </div>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div className="flex items-center justify-between">
                 <Label htmlFor="can_save_prompts" className="text-sm">
@@ -668,7 +926,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
                   onCheckedChange={(checked) => handleInputChange('settings.default_employee_settings.can_save_prompts', checked)}
                 />
               </div>
-              
+
               <div className="flex items-center justify-between">
                 <Label htmlFor="can_upload_files" className="text-sm">
                   Can Upload Files
@@ -685,7 +943,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
           {/* Features */}
           <div className="space-y-4">
             <h3 className="text-lg font-medium">Organization Features</h3>
-            
+
             <div className="grid grid-cols-1 gap-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -697,7 +955,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
                   onCheckedChange={(checked) => handleFeatureToggle('analytics_enabled', checked)}
                 />
               </div>
-              
+
               <div className="flex items-center justify-between">
                 <div>
                   <Label className="text-sm font-medium">File Sharing Enabled</Label>
@@ -708,7 +966,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
                   onCheckedChange={(checked) => handleFeatureToggle('file_sharing_enabled', checked)}
                 />
               </div>
-              
+
               <div className="flex items-center justify-between">
                 <div>
                   <Label className="text-sm font-medium">Custom Prompts Enabled</Label>
@@ -719,7 +977,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
                   onCheckedChange={(checked) => handleFeatureToggle('custom_prompts_enabled', checked)}
                 />
               </div>
-              
+
               <div className="flex items-center justify-between">
                 <div>
                   <Label className="text-sm font-medium">API Access Enabled</Label>
@@ -734,14 +992,12 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
           </div>
         </form>
 
+
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button 
-            onClick={handleSubmit} 
-            disabled={loading}
-          >
+          <Button onClick={handleSubmit} disabled={loading}>
             {loading ? (mode === 'edit' ? 'Saving...' : 'Creating...') : (mode === 'edit' ? 'Save Changes' : 'Create Organization')}
           </Button>
         </DialogFooter>

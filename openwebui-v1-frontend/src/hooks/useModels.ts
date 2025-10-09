@@ -400,40 +400,6 @@ export const useModels = () => {
         }
     };
 
-    const seedModels = async () => {
-        try {
-            console.log('🌱 Seeding models...');
-            const response = await fetch(buildApiUrl('/api/admin/models/seed'), {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('superAdminToken')}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-            
-            console.log('Seed response status:', response.status);
-            
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to seed models');
-            }
-            
-            const result = await response.json();
-            console.log('Seed result:', result);
-            
-            if (result.success) {
-                // Automatically refresh the models list to show seeded models
-                await fetchModels();
-                return true;
-            } else {
-                throw new Error(result.error || 'Failed to seed models');
-            }
-        } catch (error) {
-            console.error('Failed to seed models:', error);
-            return false;
-        }
-    };
-
     useEffect(() => {
         fetchModels();
     }, []);
@@ -446,7 +412,6 @@ export const useModels = () => {
         refetch: fetchModels,
         updateModel,
         createModel,
-        deleteModel,
-        seedModels
+        deleteModel
     };
 };

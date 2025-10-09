@@ -1,4 +1,4 @@
-import { Building2, Users, Palette, MessageSquare, BarChart3, X, Menu, LogOut } from 'lucide-react';
+import { Building2, Users, Palette, MessageSquare, BarChart3, X, Layers, LogOut } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
@@ -21,6 +21,7 @@ export const OrgAdminLayout = ({ children, activeTab, setActiveTab, orgSlug }: O
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
+    { id: 'models', label: 'Models', icon: Layers },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'branding', label: 'Branding', icon: Palette },
     { id: 'chat', label: 'Admin Chat', icon: MessageSquare },

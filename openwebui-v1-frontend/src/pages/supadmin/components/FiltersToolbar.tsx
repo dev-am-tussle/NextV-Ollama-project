@@ -17,7 +17,6 @@ interface FiltersToolbarProps {
     selectedTags: string[];
     onTagsChange: (tags: string[]) => void;
     onAddModel: () => void;
-    onSeedModels?: () => void;
 }
 
 const tierColors = {
@@ -38,7 +37,6 @@ export const FiltersToolbar = ({
     selectedTags,
     onTagsChange,
     onAddModel,
-    onSeedModels,
 }: FiltersToolbarProps) => {
     return (
         <div className="space-y-4">
@@ -80,13 +78,6 @@ export const FiltersToolbar = ({
                         <SelectItem value="inactive">Inactive</SelectItem>
                     </SelectContent>
                 </Select>
-
-                {/* Seed Models Button (for development) */}
-                {onSeedModels && (
-                    <Button onClick={onSeedModels} variant="outline" size="sm">
-                        Seed Data
-                    </Button>
-                )}
 
                 {/* Add Model Button */}
                 <Button 

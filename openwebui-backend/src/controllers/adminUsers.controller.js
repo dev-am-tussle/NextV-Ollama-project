@@ -286,3 +286,171 @@ export async function getUsersStats(req, res) {
     });
   }
 }
+
+// POST /api/admin/users - Create a new user
+export async function createUser(req, res) {
+  try {
+    const { name, email, role, organization_id, employee_details } = req.body;
+
+    // Validate required fields
+    if (!name || !email) {
+      return res.status(400).json({
+        success: false,
+        error: "Name and email are required"
+      });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        error: "User with this email already exists"
+      });
+    }
+
+    // Create user data
+    const userData = {
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
+      role: role || 'employee',
+      status: 'active',
+      email_verified: false,
+      organization_id: organization_id || null,
+      employee_details: employee_details || {}
+    };
+
+    // Create user with default settings
+    const { createUserWithDefaults } = await import('../models/user.models.js');
+    const { user, settings } = await createUserWithDefaults(userData);
+
+    res.status(201).json({
+      success: true,
+      message: "User created successfully",
+      data: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        email_verified: user.email_verified,
+        organization_id: user.organization_id,
+        employee_details: user.employee_details,
+        created_at: user.created_at,
+        updated_at: user.updated_at
+      }
+    });
+  } catch (error) {
+    console.error("Error creating user:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to create user"
+    });
+  }
+}
+
+// POST /api/admin/users/bulk - Create multiple users
+export async function createBulkUsers(req, res) {
+  try {
+    const { users, organization_id } = req.body;
+
+    if (!Array.isArray(users) || users.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Users array is required and must not be empty"
+      });
+    }
+
+    const results = {
+      success: [],
+      errors: []
+    };
+
+    // Import createUserWithDefaults
+    const { createUserWithDefaults } = await import('../models/user.models.js');
+
+    for (let i = 0; i < users.length; i++) {
+      const userData = users[i];
+      
+      try {
+        // Validate required fields
+        if (!userData.name || !userData.email) {
+          results.errors.push({
+            index: i,
+            data: userData,
+            error: "Name and email are required"
+          });
+          continue;
+        }
+
+        // Check if user already exists
+        const existingUser = await User.findOne({ 
+          email: userData.email.toLowerCase() 
+        });
+        
+        if (existingUser) {
+          results.errors.push({
+            index: i,
+            data: userData,
+            error: "User with this email already exists"
+          });
+          continue;
+        }
+
+        // Create user data
+        const newUserData = {
+          name: userData.name.trim(),
+          email: userData.email.toLowerCase().trim(),
+          role: userData.role || 'employee',
+          status: 'active',
+          email_verified: false,
+          organization_id: organization_id || null,
+          employee_details: {
+            department: userData.department || '',
+            job_title: userData.job_title || '',
+            employee_id: userData.employee_id || '',
+            hired_date: userData.hired_date || null
+          }
+        };
+
+        // Create user with default settings
+        const { user } = await createUserWithDefaults(newUserData);
+        
+        results.success.push({
+          index: i,
+          user: {
+            id: user._id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            organization_id: user.organization_id,
+            employee_details: user.employee_details
+          }
+        });
+      } catch (error) {
+        console.error(`Error creating user at index ${i}:`, error);
+        results.errors.push({
+          index: i,
+          data: userData,
+          error: error.message || "Failed to create user"
+        });
+      }
+    }
+
+    res.status(201).json({
+      success: true,
+      message: `Created ${results.success.length} users successfully`,
+      data: {
+        created: results.success.length,
+        failed: results.errors.length,
+        results: results
+      }
+    });
+  } catch (error) {
+    console.error("Error in bulk user creation:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to create users"
+    });
+  }
+}

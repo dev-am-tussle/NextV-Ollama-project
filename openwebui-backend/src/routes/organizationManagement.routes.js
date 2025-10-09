@@ -10,7 +10,6 @@ router.use(requireSuperAdminForOrganizations); // All routes require super admin
 // Organization CRUD
 router.get("/", orgController.getAllOrganizations);
 router.get("/available-models", orgController.getAvailableModels);
-router.post("/seed-models", orgController.seedAvailableModels);
 router.get("/:id", orgController.getOrganizationById);
 router.post("/", orgController.createOrganization);
 router.put("/:id", orgController.updateOrganization);

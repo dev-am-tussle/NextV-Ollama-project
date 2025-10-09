@@ -1,4 +1,5 @@
 import apiFetch from "@/lib/api";
+import { adminApiFetch } from "./adminAuth";
 
 export interface AvailableModel {
   _id: string;
@@ -47,6 +48,44 @@ export async function getAvailableModels(): Promise<ModelsResponse> {
   return apiFetch("available-models");
 }
 
+// Admin: Get available models for organization selection
+export interface AvailableModelForOrg {
+  _id: string;
+  name: string;
+  display_name: string;
+  description: string;
+  category: string;
+  tags: string[];
+  performance_tier: "fast" | "balanced" | "powerful";
+  size: string;
+  min_ram_gb: number;
+}
+
+export interface AvailableModelsForOrgResponse {
+  success: boolean;
+  data: AvailableModelForOrg[];
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}
+
+export async function getAvailableModelsForOrganization(): Promise<AvailableModelsForOrgResponse> {
+  // Use existing admin/models endpoint with is_active=true filter
+  const response = await getAllModels({
+    is_active: true,
+    limit: 100 // Get all active models
+  });
+  
+  return {
+    success: response.success,
+    data: response.data || [],
+    pagination: response.pagination
+  };
+}
+
 // Admin: Get all models (with pagination and filters)
 export async function getAllModels(params?: {
   page?: number;
@@ -61,37 +100,37 @@ export async function getAllModels(params?: {
   if (params?.is_active !== undefined) queryParams.append("is_active", params.is_active.toString());
   
   const query = queryParams.toString();
-  return apiFetch(`admin/models${query ? `?${query}` : ""}`);
+  return adminApiFetch(`/api/admin/models${query ? `?${query}` : ""}`);
 }
 
 // Admin: Create new model
 export async function createModel(model: Partial<AvailableModel>) {
-  return apiFetch("admin/models", {
+  return adminApiFetch("/api/admin/models", {
     method: "POST",
-    body: model as any,
+    body: JSON.stringify(model),
   });
 }
 
 // Admin: Update existing model
 export async function updateModel(id: string, model: Partial<AvailableModel>) {
-  return apiFetch(`admin/models/${id}`, {
+  return adminApiFetch(`/api/admin/models/${id}`, {
     method: "PUT",
-    body: model as any,
+    body: JSON.stringify(model),
   });
 }
 
 // Admin: Delete model
 export async function deleteModel(id: string) {
-  return apiFetch(`admin/models/${id}`, {
+  return adminApiFetch(`/api/admin/models/${id}`, {
     method: "DELETE",
   });
 }
 
 // Pull model to local system (future implementation)
 export async function pullModel(modelName: string): Promise<PullModelResponse> {
-  return apiFetch("admin/models/pull", {
+  return adminApiFetch("/api/admin/models/pull", {
     method: "POST",
-    body: { modelName } as PullModelRequest as any,
+    body: JSON.stringify({ modelName }),
   });
 }
 
@@ -241,6 +280,6 @@ export async function pullModelWithProgress(
 export async function removeModelFromSystem(modelName: string): Promise<{ success: boolean; message: string }> {
   return apiFetch("models/remove", {
     method: "DELETE",
-    body: { modelName },
+    body: JSON.stringify({ modelName }),
   });
 }

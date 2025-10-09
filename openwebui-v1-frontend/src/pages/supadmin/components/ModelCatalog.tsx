@@ -23,7 +23,7 @@ export const ModelCatalog = () => {
     const [slideOverOpen, setSlideOverOpen] = useState(false);
     const [isAddingModel, setIsAddingModel] = useState(false);
 
-    const { models, isLoading, backendOnline, lastError, refetch, updateModel, createModel, deleteModel, seedModels } = useModels();
+    const { models, isLoading, backendOnline, lastError, refetch, updateModel, createModel, deleteModel } = useModels();
 
     const filteredModels = useMemo(() => {
         return models.filter((model) => {
@@ -76,13 +76,6 @@ export const ModelCatalog = () => {
         handleCloseSlideOver();
     };
 
-    const handleSeedModels = async () => {
-        const success = await seedModels();
-        if (success) {
-            console.log("Models seeded successfully");
-        }
-    };
-
     return (
         <div className="space-y-6">
             {!backendOnline && lastError && (
@@ -117,7 +110,6 @@ export const ModelCatalog = () => {
                 selectedTags={selectedTags}
                 onTagsChange={setSelectedTags}
                 onAddModel={handleAddModel}
-                onSeedModels={handleSeedModels}
             />
 
             <ModelsTable

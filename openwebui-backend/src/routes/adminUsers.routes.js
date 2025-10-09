@@ -10,6 +10,12 @@ router.use(requireAuth);
 // GET /api/admin/users - Get all users with pagination
 router.get("/", adminUsersController.getAllUsers);
 
+// POST /api/admin/users - Create a new user
+router.post("/", adminUsersController.createUser);
+
+// POST /api/admin/users/bulk - Create multiple users
+router.post("/bulk", adminUsersController.createBulkUsers);
+
 // GET /api/admin/users/stats - Get user statistics
 router.get("/stats", adminUsersController.getUsersStats);
 

@@ -22,7 +22,8 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Shuffle, Eye, EyeOff, Plus, X, Check, Search, ChevronDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { createOrganization, updateOrganization, type CreateOrganizationData, type OrganizationWithStats, fetchAvailableModels, assignModelsToOrganization, seedAvailableModels } from "@/services/organizationManagement";
+import { createOrganization, updateOrganization, type CreateOrganizationData, type OrganizationWithStats, assignModelsToOrganization } from "@/services/organizationManagement";
+import { getAvailableModelsForOrganization, type AvailableModelForOrg } from "@/services/models";
 import { CircleLoader } from "@/components/ui/loader";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -51,7 +52,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [modelsLoading, setModelsLoading] = useState(false);
-  const [availableModels, setAvailableModels] = useState<any[]>([]);
+  const [availableModels, setAvailableModels] = useState<AvailableModelForOrg[]>([]);
   const [selectedModelIds, setSelectedModelIds] = useState<string[]>([]);
   const [modelSearchOpen, setModelSearchOpen] = useState(false);
   const [modelSearchQuery, setModelSearchQuery] = useState('');
@@ -152,69 +153,25 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
     try {
       setModelsLoading(true);
       console.log('🔄 Loading available models...');
-      const res = await fetchAvailableModels();
+      const res = await getAvailableModelsForOrganization();
       console.log('📦 Models response:', res);
       if (res.success) {
-        const models = res.models || res.data || [];
+        const models = res.data || [];
         console.log('✅ Loaded models:', models);
         setAvailableModels(models);
       } else {
         console.error('❌ Failed to load models:', res);
+        toast({
+          title: "Error",
+          description: "Failed to load available models",
+          variant: "destructive",
+        });
       }
     } catch (e) {
       console.error('❌ Failed to load models (exception):', e);
-    } finally {
-      setModelsLoading(false);
-    }
-  };
-
-  const handleSeedModels = async () => {
-    try {
-      setModelsLoading(true);
-      console.log('🌱 Seeding models...');
-      const res = await seedAvailableModels(false); // Don't force by default
-      console.log('🌱 Seed response:', res);
-      
-      if (res.success) {
-        toast({
-          title: "Success",
-          description: `Successfully seeded ${res.data?.length || 0} models`,
-        });
-        // Reload models after seeding
-        await loadAvailableModels();
-      } else {
-        // If models already exist, ask user if they want to replace them
-        if (res.existing_count > 0) {
-          const shouldForce = confirm(`${res.existing_count} models already exist. Do you want to replace them with fresh seed data?`);
-          if (shouldForce) {
-            const forceRes = await seedAvailableModels(true);
-            if (forceRes.success) {
-              toast({
-                title: "Success",
-                description: `Successfully replaced with ${forceRes.data?.length || 0} fresh models`,
-              });
-              await loadAvailableModels();
-            } else {
-              toast({
-                title: "Error",
-                description: forceRes.error || "Failed to seed models",
-                variant: "destructive",
-              });
-            }
-          }
-        } else {
-          toast({
-            title: "Error",
-            description: res.error || "Failed to seed models",
-            variant: "destructive",
-          });
-        }
-      }
-    } catch (e) {
-      console.error('❌ Failed to seed models:', e);
       toast({
         title: "Error",
-        description: "Failed to seed models",
+        description: "Failed to load available models",
         variant: "destructive",
       });
     } finally {
@@ -563,21 +520,9 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
           <div className="space-y-4 mt-6">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-medium">Assign Models</h3>
-              <div className="flex gap-2">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handleSeedModels} 
-                  disabled={modelsLoading}
-                  className="text-xs"
-                >
-                  {modelsLoading ? 'Seeding...' : 'Seed Models'}
-                </Button>
-                <Button type="button" variant="outline" size="sm" onClick={loadAvailableModels} disabled={modelsLoading}>
-                  {modelsLoading ? 'Refreshing...' : 'Refresh'}
-                </Button>
-              </div>
+              <Button type="button" variant="outline" size="sm" onClick={loadAvailableModels} disabled={modelsLoading}>
+                {modelsLoading ? 'Refreshing...' : 'Refresh'}
+              </Button>
             </div>
             <p className="text-xs text-muted-foreground">Select which models this organization can access. These appear as allowed models in org settings.</p>
 
@@ -616,18 +561,8 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
                     </div>
                     <div className="max-h-60 overflow-auto border-t">
                       {availableModels.length === 0 ? (
-                        <div className="p-4 text-center space-y-2">
+                        <div className="p-4 text-center">
                           <p className="text-sm text-muted-foreground">No models available</p>
-                          <Button 
-                            type="button" 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={handleSeedModels}
-                            disabled={modelsLoading}
-                            className="text-xs"
-                          >
-                            Seed Sample Models
-                          </Button>
                         </div>
                       ) : (
                         availableModels
@@ -638,12 +573,12 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
                             (m.size || '').toLowerCase().includes(modelSearchQuery.toLowerCase())
                           )
                           .map((model) => {
-                            const isSelected = selectedModelIds.includes(model._id || model.id);
+                            const isSelected = selectedModelIds.includes(model._id);
                             return (
                               <div
-                                key={model._id || model.id}
+                                key={model._id}
                                 className="flex items-center space-x-2 p-2 hover:bg-muted cursor-pointer"
-                                onClick={() => toggleModelSelection(model._id || model.id)}
+                                onClick={() => toggleModelSelection(model._id)}
                               >
                                 <div className="flex h-4 w-4 items-center justify-center border rounded">
                                   {isSelected && <Check className="h-3 w-3 text-primary" />}
@@ -658,18 +593,11 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
                                   {model.description && (
                                     <p className="text-xs text-muted-foreground truncate">{model.description}</p>
                                   )}
-                                  {(model.parameters || model.performance_tier) && (
+                                  {model.performance_tier && (
                                     <div className="flex gap-1">
-                                      {model.parameters && (
-                                        <Badge variant="secondary" className="text-xs px-1 py-0">
-                                          {model.parameters}
-                                        </Badge>
-                                      )}
-                                      {model.performance_tier && (
-                                        <Badge variant="secondary" className="text-xs px-1 py-0">
-                                          {model.performance_tier}
-                                        </Badge>
-                                      )}
+                                      <Badge variant="secondary" className="text-xs px-1 py-0">
+                                        {model.performance_tier}
+                                      </Badge>
                                     </div>
                                   )}
                                 </div>
@@ -687,7 +615,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
                     <Label className="text-sm font-medium">Selected Models ({selectedModelIds.length})</Label>
                     <div className="flex flex-wrap gap-2">
                       {selectedModelIds.map((modelId) => {
-                        const model = availableModels.find(m => (m._id || m.id) === modelId);
+                        const model = availableModels.find(m => m._id === modelId);
                         return (
                           <Badge
                             key={modelId}

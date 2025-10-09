@@ -90,7 +90,7 @@ export const ModelsTable = ({ models, isLoading, onModelClick, onRefresh, onUpda
                     </div>
                     <h3 className="text-lg font-medium text-foreground mb-2">No Models Found</h3>
                     <p className="text-muted-foreground mb-4 max-w-sm">
-                        Your database is empty. Click "Seed Data" to populate with sample models or "Add Model" to create a new one.
+                        Your database is empty. Click "Add Model" to create a new one.
                     </p>
                 </div>
             </div>

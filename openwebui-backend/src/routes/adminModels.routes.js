@@ -13,9 +13,6 @@ router.get("/", adminModelsController.getAllModels);
 // POST /api/admin/models - Admin adds new model
 router.post("/", adminModelsController.createModel);
 
-// POST /api/admin/models/seed - Seed initial models data
-router.post("/seed", adminModelsController.seedModels);
-
 // PUT /api/admin/models/:id - Admin updates model
 router.put("/:id", adminModelsController.updateModel);
 

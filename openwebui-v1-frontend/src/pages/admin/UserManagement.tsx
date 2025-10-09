@@ -81,7 +81,7 @@ export const UserManagement = () => {
                         <CardTitle>Organization Users</CardTitle>
                         <Button className="gap-2">
                             <UserPlus className="h-4 w-4" />
-                            Invite User
+                            Add User
                         </Button>
                     </div>
                 </CardHeader>

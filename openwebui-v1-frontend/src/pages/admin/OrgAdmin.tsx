@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { OrgAdminLayout, OrgAnalytics, UserManagement, BrandingSettings, AdminChat } from "@/components/admin/org";
 
-type TabType = "dashboard" | "users" | "branding" | "chat" | "setting";
+type TabType = "dashboard" | "models" | "users" | "branding" | "chat" | "setting";
 
 const OrgAdmin = () => {
   const [activeTab, setActiveTab] = useState<TabType>("dashboard");
@@ -17,6 +17,7 @@ const OrgAdmin = () => {
         // Normal layout for other tabs
         <OrgAdminLayout activeTab={activeTab} setActiveTab={setActiveTab} orgSlug={slug}>
           {activeTab === "dashboard" && <OrgAnalytics orgSlug={slug} />}
+          {activeTab === "models" && <div>Models</div>}
           {activeTab === "users" && <UserManagement orgSlug={slug} />}
           {activeTab === "branding" && <BrandingSettings orgSlug={slug} />}
           {activeTab === "setting" && <div>Settings Content</div>}

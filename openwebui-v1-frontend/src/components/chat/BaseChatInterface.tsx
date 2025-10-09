@@ -44,6 +44,7 @@ interface BaseChatInterfaceProps {
   onSignOut: () => Promise<void>;
   headerTitle?: string;
   defaultModel?: string;
+  onBack?: () => void;
 }
 
 const BaseChatInterface: React.FC<BaseChatInterfaceProps> = ({
@@ -56,7 +57,8 @@ const BaseChatInterface: React.FC<BaseChatInterfaceProps> = ({
   refreshSavedPrompts,
   onSignOut,
   headerTitle,
-  defaultModel = "gemma:2b"
+  defaultModel = "gemma:2b",
+  onBack
 }) => {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -471,6 +473,7 @@ const BaseChatInterface: React.FC<BaseChatInterfaceProps> = ({
           onOpenSettings={() => setIsSettingsOpen(true)}
           user={user}
           onSignOut={onSignOut}
+          onBack={onBack}
         />
 
         <div className="flex-1 flex flex-col min-h-0">

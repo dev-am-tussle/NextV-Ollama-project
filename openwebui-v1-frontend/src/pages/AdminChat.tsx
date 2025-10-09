@@ -4,15 +4,20 @@ import { useAuth } from "@/providers/AuthProvider";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { createChatService } from "@/services/chatService";
-import { 
-  getStoredAdminProfile, 
-  getStoredOrganization, 
+import {
+  getStoredAdminProfile,
+  getStoredOrganization,
   unifiedLogout,
-  isAuthenticated as isUnifiedAuthenticated 
+  isAuthenticated as isUnifiedAuthenticated
 } from "@/services/unifiedAuth";
-import { Building2 } from "lucide-react";
+import { Building2, ArrowLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
-const AdminChat: React.FC = () => {
+interface AdminChatProps {
+  onBack?: () => void;
+}
+
+const AdminChat: React.FC<AdminChatProps> = ({ onBack }) => {
   const {
     isAuthenticated,
     user,
@@ -55,8 +60,8 @@ const AdminChat: React.FC = () => {
       navigate("/auth/login");
     } catch (error) {
       console.error("Admin sign out error:", error);
-      toast({ 
-        title: "Sign out", 
+      toast({
+        title: "Sign out",
         description: "Admin sign out completed.",
       });
       navigate("/auth/login");
@@ -77,7 +82,7 @@ const AdminChat: React.FC = () => {
   };
 
   return (
-    <div className="relative">
+    <div className="relative h-screen">
       <BaseChatInterface
         userType="admin"
         chatService={chatService}
@@ -89,6 +94,7 @@ const AdminChat: React.FC = () => {
         onSignOut={handleSignOut}
         headerTitle={getHeaderTitle()}
         defaultModel={getDefaultModel()}
+        onBack={onBack}
       />
     </div>
   );

@@ -46,21 +46,21 @@ export const OrgAdminLayout = ({ children, activeTab, setActiveTab }: OrgAdminLa
             </aside>
 
             {/* Main Content */}
-            <div className="flex flex-1 flex-col">
+            {/* <div className="flex flex-1 flex-col"> */}
                 {/* Header */}
-                <header className="flex h-16 items-center justify-between border-b border-border px-6">
+                {/* <header className="flex h-16 items-center justify-between border-b border-border px-6">
                     <div>
                         <h2 className="text-xl font-semibold capitalize">{activeTab}</h2>
                         <p className="text-sm text-muted-foreground">Manage your organization</p>
                     </div>
                     <ThemeToggle />
-                </header>
+                </header> */}
 
                 {/* Content */}
-                <main className="flex-1 overflow-auto p-6">
+                {/* <main className="flex-1 overflow-auto p-6">
                     {children}
-                </main>
-            </div>
+                </main> */}
+            {/* </div> */}
         </div>
     );
 };

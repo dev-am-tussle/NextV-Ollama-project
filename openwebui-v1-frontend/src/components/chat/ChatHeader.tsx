@@ -45,7 +45,7 @@ export const ChatHeader: React.FC<Props> = ({
   return (
     <header className="border-b p-4 flex items-center justify-between">
       <div className="flex items-center space-x-4">
-        <SidebarTrigger />
+        {/* <SidebarTrigger /> */}
         <div className="flex items-center gap-3">
           <ModelSelector
             selected={selectedModel}

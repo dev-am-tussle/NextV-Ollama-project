@@ -133,6 +133,16 @@ export const adminLogout = async (): Promise<void> => {
 };
 
 export const getAdminToken = (): string | null => {
+  // First check the unified auth token
+  const unifiedToken = localStorage.getItem('authToken');
+  const userType = localStorage.getItem('userType');
+  
+  // If user is authenticated as admin via unified auth, use that token
+  if (unifiedToken && userType === 'admin') {
+    return unifiedToken;
+  }
+  
+  // Fallback to legacy admin token
   return localStorage.getItem(ADMIN_TOKEN_KEY);
 };
 
@@ -143,6 +153,14 @@ export const getAdminProfile = (): AdminLoginResponse | null => {
 
 export const isAdminAuthenticated = (): boolean => {
   const token = getAdminToken();
+  
+  // Check unified auth
+  const userType = localStorage.getItem('userType');
+  if (token && userType === 'admin') {
+    return true;
+  }
+  
+  // Check legacy admin auth
   const profile = getAdminProfile();
   return !!(token && profile);
 };
@@ -180,10 +198,13 @@ export const adminApiFetch = async (endpoint: string, options: RequestInit = {})
   });
 
   if (response.status === 401) {
-    // Token expired or invalid
+    // Token expired or invalid - clear both auth systems
     localStorage.removeItem(ADMIN_TOKEN_KEY);
     localStorage.removeItem(ADMIN_PROFILE_KEY);
-    window.location.href = '/admin/login';
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userType');
+    localStorage.removeItem('adminProfile');
+    window.location.href = '/auth/login';
     throw new Error('Admin session expired');
   }
 

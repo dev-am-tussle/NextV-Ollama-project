@@ -2,6 +2,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+dotenv.config();
 import helmet from "helmet";
 import morgan from "morgan";
 import cookieParser from "cookie-parser";
@@ -19,10 +20,10 @@ import adminAuthRoutes from "./routes/adminAuth.routes.js";
 import organizationManagementRoutes from "./routes/organizationManagement.routes.js";
 import superAdminRoutes from "./routes/superAdmin.routes.js";
 import unifiedAuthRoutes from "./routes/unifiedAuth.routes.js";
+import invitationRoutes from "./routes/invitation.routes.js";
 import jwt from "jsonwebtoken";
 import { connectDB, closeDB } from "./config/ollama.db.js"; // DB helpers import
 
-dotenv.config();
 
 const app = express();
 
@@ -86,6 +87,9 @@ app.use("/api/v1/auth", oauthRoutes);
 app.use("/api/admin/auth", adminAuthRoutes);
 app.use("/api/super-admin/auth", superAdminRoutes);
 app.use("/api/super-admin/organizations", organizationManagementRoutes);
+
+// Invitation routes
+app.use("/api", invitationRoutes);
 
 // Unified authentication route
 app.use("/api/v1/unified-auth", unifiedAuthRoutes);

@@ -6,3 +6,5 @@ export * from "./file.model.js";
 export * from "./message.model.js";
 export * from "./admin.model.js";
 export * from "./organization.model.js";
+export * from "./invitation.model.js";
+export * from "./adminSettings.model.js";

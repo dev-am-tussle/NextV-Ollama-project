@@ -212,14 +212,31 @@ export const fetchOrganizationEmployees = async (organizationId: string, page = 
 
 export const fetchEmployeesByOrgSlug = async (orgSlug: string, page = 1, limit = 50) => {
   try {
-    // First get organization by slug
-    const orgResponse = await fetchOrganizationBySlug(orgSlug);
-    if (!orgResponse.success || !orgResponse.data) {
-      return { success: false, error: 'Organization not found' };
+    // For org admins, use the admin users endpoint which filters by their organization
+    const response = await adminApiFetch(`/api/admin/users?page=${page}&limit=${limit}`);
+    
+    if (response.success && response.data) {
+      // Transform the response to match the expected format
+      return {
+        success: true,
+        data: response.data.map((user: any) => ({
+          _id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role || 'employee',
+          status: user.status || 'active',
+          email_verified: user.email_verified,
+          created_at: user.created_at,
+          updated_at: user.updated_at,
+          last_login: user.last_login,
+          employee_details: user.employee_details || {},
+          settings: user.settings
+        })),
+        pagination: response.pagination
+      };
     }
     
-    // Then fetch employees
-    return await fetchOrganizationEmployees(orgResponse.data._id, page, limit);
+    return { success: false, error: 'Failed to fetch employees' };
   } catch (error) {
     console.error('Error fetching employees by org slug:', error);
     return { success: false, error: 'Failed to fetch employees' };

@@ -4,7 +4,8 @@ import { getCurrentUserType } from "@/services/unifiedAuth";
 
 /**
  * LegacyRedirect component for root path "/"
- * Redirects users to appropriate chat interface based on their user type
+ * Redirects all users to user chat interface
+ * Admins can access their organization admin panel via /:slug/org-admin
  */
 const LegacyRedirect: React.FC = () => {
   const navigate = useNavigate();
@@ -12,12 +13,9 @@ const LegacyRedirect: React.FC = () => {
   useEffect(() => {
     const userType = getCurrentUserType();
     
-    if (userType === 'admin') {
-      navigate('/admin/chat', { replace: true });
-    } else {
-      // Default to user chat for regular users and undefined user types
-      navigate('/user/chat', { replace: true });
-    }
+    // All users (including admins) go to user chat now
+    // Admins can access their organization admin panel via /:slug/org-admin
+    navigate('/user/chat', { replace: true });
   }, [navigate]);
 
   // Show loading state while redirecting

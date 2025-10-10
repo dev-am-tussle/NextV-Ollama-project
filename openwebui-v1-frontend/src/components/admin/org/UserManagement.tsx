@@ -5,11 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, UserPlus, MoreVertical, Mail, Calendar, Loader2, Users } from 'lucide-react';
+import { Search, UserPlus, MoreVertical, Mail, Calendar, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { 
   fetchEmployeesByOrgSlug, 
@@ -18,7 +14,8 @@ import {
   type OrganizationEmployee,
   type CreateEmployeeData 
 } from '@/services/organizationManagement';
-import { CircleLoader } from '@/components/ui/loader';
+import { AddEmployeeModal } from './AddEmployeeModal';
+import { BulkAddEmployeesModal } from './BulkAddEmployeesModal';
 
 interface UserManagementProps {
   orgSlug?: string;
@@ -36,21 +33,8 @@ export const UserManagement = ({ orgSlug }: UserManagementProps) => {
   });
 
   // Modal states
-  const [showAddUserModal, setShowAddUserModal] = useState(false);
-  const [showBulkUserModal, setShowBulkUserModal] = useState(false);
-  const [addingUser, setAddingUser] = useState(false);
-
-  // Form states
-  const [newUser, setNewUser] = useState({
-    name: '',
-    email: '',
-    department: '',
-    job_title: '',
-    employee_id: '',
-    hired_date: ''
-  });
-
-  const [bulkUserText, setBulkUserText] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showBulkModal, setShowBulkModal] = useState(false);
 
   // Load users when component mounts or orgSlug changes
   useEffect(() => {
@@ -129,165 +113,9 @@ export const UserManagement = ({ orgSlug }: UserManagementProps) => {
     toast.success(`${action} action triggered for user ${userId}`);
   };
 
-  // Form handlers
-  const resetUserForm = () => {
-    setNewUser({
-      name: '',
-      email: '',
-      department: '',
-      job_title: '',
-      employee_id: '',
-      hired_date: ''
-    });
-  };
-
-  // Email validation
-  const isValidEmail = (email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  };
-
-  // Form validation
-  const validateUserForm = (): string | null => {
-    if (!newUser.name.trim()) {
-      return 'Name is required';
-    }
-    if (!newUser.email.trim()) {
-      return 'Email is required';
-    }
-    if (!isValidEmail(newUser.email)) {
-      return 'Please enter a valid email address';
-    }
-    return null;
-  };
-
-  const handleAddUser = async () => {
-    // Validate form
-    const validationError = validateUserForm();
-    if (validationError) {
-      toast.error(validationError);
-      return;
-    }
-
-    if (!orgSlug) {
-      toast.error('Organization slug is required');
-      return;
-    }
-
-    try {
-      setAddingUser(true);
-      console.log('Adding user:', newUser, 'to org:', orgSlug);
-      
-      const employeeData: CreateEmployeeData = {
-        name: newUser.name.trim(),
-        email: newUser.email.trim().toLowerCase(),
-        department: newUser.department.trim(),
-        job_title: newUser.job_title.trim(),
-        employee_id: newUser.employee_id.trim(),
-        hired_date: newUser.hired_date
-      };
-
-      const response = await createEmployeeByOrgSlug(orgSlug, employeeData);
-      
-      if (response.success) {
-        toast.success(response.message || 'Employee added successfully');
-        setShowAddUserModal(false);
-        resetUserForm();
-        // Reload users list
-        loadUsers();
-      } else {
-        toast.error(response.error || 'Failed to add employee');
-      }
-    } catch (error) {
-      console.error('Error adding user:', error);
-      toast.error('Failed to add employee');
-    } finally {
-      setAddingUser(false);
-    }
-  };
-
-  const handleBulkAddUsers = async () => {
-    if (!bulkUserText.trim()) {
-      toast.error('Please enter user data');
-      return;
-    }
-
-    if (!orgSlug) {
-      toast.error('Organization slug is required');
-      return;
-    }
-
-    try {
-      setAddingUser(true);
-      // Parse bulk user text (expecting CSV-like format)
-      const lines = bulkUserText.trim().split('\n');
-      const employees: CreateEmployeeData[] = [];
-      const errors: string[] = [];
-      
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue; // Skip empty lines
-        
-        const [name, email, department, jobTitle] = line.split(',').map(s => s.trim());
-        
-        if (!name) {
-          errors.push(`Line ${i + 1}: Name is required`);
-          continue;
-        }
-        if (!email) {
-          errors.push(`Line ${i + 1}: Email is required`);
-          continue;
-        }
-        if (!isValidEmail(email)) {
-          errors.push(`Line ${i + 1}: Invalid email format`);
-          continue;
-        }
-        
-        employees.push({ 
-          name, 
-          email: email.toLowerCase(), 
-          department: department || '', 
-          job_title: jobTitle || '' 
-        });
-      }
-
-      if (errors.length > 0) {
-        toast.error(`Validation errors:\n${errors.slice(0, 3).join('\n')}${errors.length > 3 ? '\n...' : ''}`);
-        return;
-      }
-
-      if (employees.length === 0) {
-        toast.error('No valid users found in the text');
-        return;
-      }
-
-      console.log('Bulk adding users:', employees, 'to org:', orgSlug);
-      
-      const response = await createBulkEmployeesByOrgSlug(orgSlug, employees);
-      
-      if (response.success) {
-        const created = response.data?.created || 0;
-        const failed = response.data?.failed || 0;
-        
-        if (failed > 0) {
-          toast.success(`${created} employees added successfully, ${failed} failed`);
-        } else {
-          toast.success(`${created} employees added successfully`);
-        }
-        
-        setShowBulkUserModal(false);
-        setBulkUserText('');
-        // Reload users list
-        loadUsers();
-      } else {
-        toast.error(response.error || 'Failed to add employees');
-      }
-    } catch (error) {
-      console.error('Error bulk adding users:', error);
-      toast.error('Failed to add employees');
-    } finally {
-      setAddingUser(false);
-    }
+  // Callback to refresh users list after invitation actions
+  const handleInvitationSuccess = () => {
+    loadUsers();
   };
 
   return (
@@ -297,23 +125,22 @@ export const UserManagement = ({ orgSlug }: UserManagementProps) => {
           <div className="flex items-center justify-between">
             <CardTitle>Organization Users</CardTitle>
             <div className="flex items-center gap-2">
-              <Dialog open={showBulkUserModal} onOpenChange={setShowBulkUserModal}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" className="gap-2">
-                    <Users className="h-4 w-4" />
-                    Bulk Add Users
-                  </Button>
-                </DialogTrigger>
-              </Dialog>
+              <Button 
+                variant="outline" 
+                className="gap-2"
+                onClick={() => setShowBulkModal(true)}
+              >
+                <Users className="h-4 w-4" />
+                Bulk Invite Employees
+              </Button>
               
-              <Dialog open={showAddUserModal} onOpenChange={setShowAddUserModal}>
-                <DialogTrigger asChild>
-                  <Button className="gap-2">
-                    <UserPlus className="h-4 w-4" />
-                    Add User
-                  </Button>
-                </DialogTrigger>
-              </Dialog>
+              <Button 
+                className="gap-2"
+                onClick={() => setShowAddModal(true)}
+              >
+                <UserPlus className="h-4 w-4" />
+                Invite Employee
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -444,159 +271,18 @@ export const UserManagement = ({ orgSlug }: UserManagementProps) => {
         </CardContent>
       </Card>
 
-      {/* Add User Modal */}
-      <Dialog open={showAddUserModal} onOpenChange={setShowAddUserModal}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Add New Employee</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-1 gap-2">
-              <Label htmlFor="name">Full Name *</Label>
-              <Input
-                id="name"
-                value={newUser.name}
-                onChange={(e) => setNewUser(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="Enter full name"
-                disabled={addingUser}
-              />
-            </div>
-            
-            <div className="grid grid-cols-1 gap-2">
-              <Label htmlFor="email">Email Address *</Label>
-              <Input
-                id="email"
-                type="email"
-                value={newUser.email}
-                onChange={(e) => setNewUser(prev => ({ ...prev, email: e.target.value }))}
-                placeholder="Enter email address"
-                disabled={addingUser}
-              />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="department">Department</Label>
-                <Input
-                  id="department"
-                  value={newUser.department}
-                  onChange={(e) => setNewUser(prev => ({ ...prev, department: e.target.value }))}
-                  placeholder="e.g. Engineering"
-                  disabled={addingUser}
-                />
-              </div>
-              
-              <div className="grid gap-2">
-                <Label htmlFor="job_title">Job Title</Label>
-                <Input
-                  id="job_title"
-                  value={newUser.job_title}
-                  onChange={(e) => setNewUser(prev => ({ ...prev, job_title: e.target.value }))}
-                  placeholder="e.g. Software Engineer"
-                  disabled={addingUser}
-                />
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="employee_id">Employee ID</Label>
-                <Input
-                  id="employee_id"
-                  value={newUser.employee_id}
-                  onChange={(e) => setNewUser(prev => ({ ...prev, employee_id: e.target.value }))}
-                  placeholder="e.g. EMP001"
-                  disabled={addingUser}
-                />
-              </div>
-              
-              <div className="grid gap-2">
-                <Label htmlFor="hired_date">Hire Date</Label>
-                <Input
-                  id="hired_date"
-                  type="date"
-                  value={newUser.hired_date}
-                  onChange={(e) => setNewUser(prev => ({ ...prev, hired_date: e.target.value }))}
-                  disabled={addingUser}
-                />
-              </div>
-            </div>
-          </div>
-          
-          <div className="flex justify-end gap-2">
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                setShowAddUserModal(false);
-                resetUserForm();
-              }}
-              disabled={addingUser}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleAddUser} disabled={addingUser}>
-              {addingUser && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Add Employee
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Bulk Add Users Modal */}
-      <Dialog open={showBulkUserModal} onOpenChange={setShowBulkUserModal}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Bulk Add Employees</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="bulk-users">Employee Data</Label>
-              <p className="text-sm text-muted-foreground">
-                Enter one employee per line in the format: Name, Email, Department, Job Title
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Example: John Doe, john@company.com, Engineering, Software Engineer
-              </p>
-              <Textarea
-                id="bulk-users"
-                value={bulkUserText}
-                onChange={(e) => setBulkUserText(e.target.value)}
-                placeholder="John Doe, john@company.com, Engineering, Software Engineer&#10;Jane Smith, jane@company.com, HR, HR Manager&#10;Bob Wilson, bob@company.com, Sales, Sales Representative"
-                className="min-h-[200px] font-mono text-sm"
-                disabled={addingUser}
-              />
-            </div>
-            
-            <div className="rounded-lg border p-4 bg-muted/50">
-              <h4 className="text-sm font-medium mb-2">Format Guidelines:</h4>
-              <ul className="text-xs text-muted-foreground space-y-1">
-                <li>• Each line represents one employee</li>
-                <li>• Use commas to separate fields: Name, Email, Department, Job Title</li>
-                <li>• Name and Email are required fields</li>
-                <li>• Department and Job Title are optional</li>
-                <li>• Empty lines will be ignored</li>
-              </ul>
-            </div>
-          </div>
-          
-          <div className="flex justify-end gap-2">
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                setShowBulkUserModal(false);
-                setBulkUserText('');
-              }}
-              disabled={addingUser}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleBulkAddUsers} disabled={addingUser}>
-              {addingUser && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Add Employees
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* New Invitation Modal Components */}
+      <AddEmployeeModal 
+        open={showAddModal}
+        onOpenChange={setShowAddModal}
+        onSuccess={handleInvitationSuccess}
+      />
+      
+      <BulkAddEmployeesModal 
+        open={showBulkModal}
+        onOpenChange={setShowBulkModal}
+        onSuccess={handleInvitationSuccess}
+      />
     </div>
   );
 };

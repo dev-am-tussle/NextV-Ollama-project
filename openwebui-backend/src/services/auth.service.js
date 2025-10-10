@@ -45,7 +45,7 @@ function signToken(user) {
       sub: user._id.toString(), 
       email: user.email,
       role: user.role,
-      is_super_admin: user.is_super_admin || false
+      is_super_admin: user.role === 'super_admin'
     },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || "1h" }

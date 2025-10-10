@@ -10,20 +10,11 @@ const UserSettingsSchema = new mongoose.Schema(
     },
     theme: { type: String, default: "light" },
     default_model: { type: String, default: "gemma:2b" },
-    // list of pulled models for this user with full model data
-    pulled_models: {
-      type: [{
-        model_id: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "AvailableModel",
-          required: true
-        },
-        pulled_at: { type: Date, default: Date.now },
-        usage_count: { type: Number, default: 0 },
-        last_used: { type: Date, default: null }
-      }],
-      default: []
-    },
+    // User's available models from organization
+    available_models: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "AvailableModel"
+    }],
     saved_prompts_ref: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "SavedPrompt",
@@ -64,14 +55,7 @@ const UserSchema = new mongoose.Schema(
     // User role for access control
     role: {
       type: String,
-      enum: ['employee', 'user', 'super_admin'], // Added super_admin role
       default: 'user',
-      index: true
-    },
-    // Super admin flag for easier queries
-    is_super_admin: {
-      type: Boolean,
-      default: false,
       index: true
     },
     // Organization reference for employees
@@ -91,14 +75,18 @@ const UserSchema = new mongoose.Schema(
         ref: "User",
         default: null
       },
-      hired_date: { type: Date, default: null },
-      // Invitation tracking
-      invited_by: {
+      // Admin settings reference for hierarchy and permissions
+      admin_settings_id: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Admin",
+        ref: "AdminSettings",
         default: null
       },
-      invitation_accepted_at: { type: Date, default: null }
+      // Current invitation reference
+      current_invitation_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Invitation",
+        default: null
+      }
     },
     // User status
     status: {

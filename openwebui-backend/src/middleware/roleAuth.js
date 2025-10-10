@@ -21,12 +21,12 @@ export function requireAuth(req, res, next) {
       // This is a base64 encoded mock token for development
       try {
         const mockPayload = JSON.parse(atob(token));
-        if (mockPayload.sub === 'superadmin-dev-id' && mockPayload.is_super_admin) {
+        if (mockPayload.sub === 'superadmin-dev-id' && mockPayload.role === 'super_admin') {
           req.user = { 
             id: mockPayload.sub, 
             email: mockPayload.email,
             role: mockPayload.role,
-            is_super_admin: mockPayload.is_super_admin
+            is_super_admin: mockPayload.role === 'super_admin'
           };
           return next();
         }
@@ -57,7 +57,7 @@ export function requireAuth(req, res, next) {
       role: decoded.role,
       admin_type: decoded.admin_type,
       organization_id: decoded.organization_id,
-      is_super_admin: decoded.is_super_admin
+      is_super_admin: decoded.role === 'super_admin'
     };
     
     return next();
@@ -104,7 +104,7 @@ export function requireSuperAdminUser(req, res, next) {
     
     try {
       // Handle development mode mock token
-      if (req.user.id === 'superadmin-dev-id' && req.user.is_super_admin) {
+      if (req.user.id === 'superadmin-dev-id' && req.user.role === 'super_admin') {
         req.superAdminUser = {
           _id: 'superadmin-dev-id',
           name: 'Super Administrator (Dev)',
@@ -130,7 +130,7 @@ export function requireSuperAdminUser(req, res, next) {
       }
 
       // Check if user has super admin privileges
-      if (!user.is_super_admin && user.role !== 'super_admin') {
+      if (user.role !== 'super_admin') {
         return res.status(403).json({ 
           error: "Super admin access required" 
         });
@@ -139,7 +139,7 @@ export function requireSuperAdminUser(req, res, next) {
       // Add user details to request
       req.superAdminUser = user;
       req.user.role = user.role;
-      req.user.is_super_admin = user.is_super_admin;
+      req.user.is_super_admin = user.role === 'super_admin';
       
       return next();
     } catch (error) {

@@ -408,8 +408,7 @@ export async function createBulkUsers(req, res) {
           employee_details: {
             department: userData.department || '',
             job_title: userData.job_title || '',
-            employee_id: userData.employee_id || '',
-            hired_date: userData.hired_date || null
+            employee_id: userData.employee_id || ''
           }
         };
 

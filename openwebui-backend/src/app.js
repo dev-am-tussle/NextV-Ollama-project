@@ -18,9 +18,11 @@ import filesRoutes from "./routes/files.routes.js";
 import oauthRoutes from "./routes/oauth.routes.js";
 import adminAuthRoutes from "./routes/adminAuth.routes.js";
 import organizationManagementRoutes from "./routes/organizationManagement.routes.js";
+import onboardingRoutes from "./routes/onboarding.routes.js";
 import superAdminRoutes from "./routes/superAdmin.routes.js";
 import unifiedAuthRoutes from "./routes/unifiedAuth.routes.js";
 import invitationRoutes from "./routes/invitation.routes.js";
+import categorizedModelsRoutes from "./routes/categorizedModels.routes.js";
 import jwt from "jsonwebtoken";
 import { connectDB, closeDB } from "./config/ollama.db.js"; // DB helpers import
 
@@ -77,6 +79,7 @@ app.use("/api/v1/available-models", modelsRoutes); // user sees active models
 app.use("/api/admin/models", adminModelsRoutes); // admin manages catalog
 app.use("/api/admin/users", adminUsersRoutes); // admin manages users
 app.use("/api/v1/user", userModelsRoutes); // user manages their pulled models
+app.use("/api/v1/user", categorizedModelsRoutes); // categorized model management
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/conversations", conversationRoutes);
 app.use("/api/v1/saved-prompts", savedPromptsRoutes);
@@ -87,6 +90,9 @@ app.use("/api/v1/auth", oauthRoutes);
 app.use("/api/admin/auth", adminAuthRoutes);
 app.use("/api/super-admin/auth", superAdminRoutes);
 app.use("/api/super-admin/organizations", organizationManagementRoutes);
+
+// Onboarding routes
+app.use("/api/onboarding", onboardingRoutes);
 
 // Invitation routes
 app.use("/api", invitationRoutes);

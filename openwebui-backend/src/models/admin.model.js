@@ -1,52 +1,6 @@
 import mongoose from "mongoose";
 
-// Admin Settings Schema
-const AdminSettingsSchema = new mongoose.Schema(
-  {
-    admin_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Admin",
-      required: true,
-    },
-    theme: { type: String, default: "light" },
-    notifications_enabled: { type: Boolean, default: true },
-    email_notifications: { type: Boolean, default: true },
-    dashboard_preferences: {
-      default_view: { type: String, default: "overview" },
-      widgets_enabled: [{ type: String }],
-      refresh_interval: { type: Number, default: 30 }, // seconds
-    },
-    // Admin-specific permissions
-    permissions: {
-      manage_users: { type: Boolean, default: true },
-      manage_models: { type: Boolean, default: true },
-      manage_organizations: { type: Boolean, default: false }, // only for super admin
-      view_analytics: { type: Boolean, default: true },
-      system_settings: { type: Boolean, default: false }, // only for super admin
-    },
-    // Organization-specific settings (if admin belongs to org)
-    organization_settings: {
-      default_user_models: [{ type: String }], // default models for new employees
-      max_users_allowed: { type: Number, default: 10 },
-      usage_limits: {
-        monthly_requests: { type: Number, default: 10000 },
-        concurrent_users: { type: Number, default: 5 },
-      },
-    },
-    created_at: { type: Date, default: Date.now },
-    updated_at: { type: Date, default: Date.now },
-  },
-  { versionKey: false }
-);
-
-AdminSettingsSchema.pre("save", function (next) {
-  this.updated_at = new Date();
-  next();
-});
-
-AdminSettingsSchema.index({ admin_id: 1 });
-
-// Admin Schema
+// Admin Schema (AdminSettings is in separate file)
 const AdminSchema = new mongoose.Schema(
   {
     name: { 
@@ -142,12 +96,6 @@ const AdminSchema = new mongoose.Schema(
       job_title: { type: String, default: null },
       avatar_url: { type: String, default: null },
     },
-    // Settings reference
-    settings_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "AdminSettings",
-      default: null,
-    },
     // Audit fields
     created_by: {
       type: mongoose.Schema.Types.ObjectId,
@@ -231,47 +179,56 @@ AdminSchema.statics.findByOrganization = function(orgId) {
     organization_id: orgId,
     status: 'active',
     deleted_at: null 
-  }).populate('settings_id');
+  });
 };
 
 // Helper function to create admin with default settings
 async function createAdminWithDefaults(adminData) {
   const Admin = mongoose.models.Admin || mongoose.model("Admin", AdminSchema);
-  const AdminSettings = mongoose.models.AdminSettings || mongoose.model("AdminSettings", AdminSettingsSchema);
+  // Import AdminSettings from the dedicated file
+  const { AdminSettings } = await import("./adminSettings.model.js");
 
   const session = await mongoose.startSession();
   session.startTransaction();
   
   try {
-    // Create admin
+    // Create admin first
     const admin = await Admin.create([adminData], { session });
     
-    // Create default settings
-    const defaultPermissions = adminData.admin_type === 'super_admin' ? {
-      manage_users: true,
-      manage_models: true,
-      manage_organizations: true,
-      view_analytics: true,
-      system_settings: true,
-    } : {
-      manage_users: true,
-      manage_models: true,
-      manage_organizations: false,
-      view_analytics: true,
-      system_settings: false,
-    };
-
+    // Create corresponding settings in AdminSettings collection
     const settings = await AdminSettings.create([{
       admin_id: admin[0]._id,
-      permissions: defaultPermissions,
+      // Default permissions based on admin type
+      permissions: adminData.admin_type === 'super_admin' ? {
+        can_invite_users: true,
+        can_remove_users: true,
+        can_modify_user_roles: true,
+        can_view_all_users: true,
+        can_manage_models: true,
+        can_assign_models: true,
+        can_view_model_usage: true,
+        can_modify_org_settings: true,
+        can_view_org_analytics: true,
+        can_manage_departments: true,
+        can_create_sub_admins: true,
+        can_manage_invitations: true,
+        can_export_data: true
+      } : {
+        can_invite_users: true,
+        can_remove_users: true,
+        can_modify_user_roles: false,
+        can_view_all_users: true,
+        can_manage_models: false,
+        can_assign_models: true,
+        can_view_model_usage: true,
+        can_modify_org_settings: false,
+        can_view_org_analytics: true,
+        can_manage_departments: true,
+        can_create_sub_admins: false,
+        can_manage_invitations: true,
+        can_export_data: false
+      }
     }], { session });
-
-    // Link settings back to admin
-    await Admin.updateOne(
-      { _id: admin[0]._id },
-      { $set: { settings_id: settings[0]._id } },
-      { session }
-    );
 
     await session.commitTransaction();
     session.endSession();
@@ -284,6 +241,5 @@ async function createAdminWithDefaults(adminData) {
   }
 }
 
-export const AdminSettings = mongoose.models.AdminSettings || mongoose.model("AdminSettings", AdminSettingsSchema);
 export const Admin = mongoose.models.Admin || mongoose.model("Admin", AdminSchema);
 export { createAdminWithDefaults };

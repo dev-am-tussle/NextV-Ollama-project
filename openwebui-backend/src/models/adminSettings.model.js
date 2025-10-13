@@ -12,14 +12,6 @@ const AdminSettingsSchema = new mongoose.Schema(
       index: true
     },
     
-    // Organization reference
-    organization_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Organization",
-      required: true,
-      index: true
-    },
-    
     // Hierarchy and permissions
     permissions: {
       // User management permissions
@@ -127,7 +119,6 @@ const AdminSettingsSchema = new mongoose.Schema(
 );
 
 // Indexes for efficient queries
-AdminSettingsSchema.index({ organization_id: 1, is_active: 1 });
 AdminSettingsSchema.index({ "hierarchy.reports_to": 1 });
 AdminSettingsSchema.index({ "hierarchy.managed_departments": 1 });
 
@@ -138,10 +129,9 @@ AdminSettingsSchema.pre("save", function (next) {
 });
 
 // Static method to create default admin settings
-AdminSettingsSchema.statics.createDefault = function(adminId, organizationId) {
+AdminSettingsSchema.statics.createDefault = function(adminId) {
   return this.create({
     admin_id: adminId,
-    organization_id: organizationId,
     permissions: {
       can_invite_users: true,
       can_remove_users: true,

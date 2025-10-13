@@ -24,7 +24,7 @@ const OrganizationSchema = new mongoose.Schema(
     },
     // Organization settings
     settings: {
-      // Model access settings
+      // Model access settings with enhanced tracking
       allowed_models: [{
         model_id: {
           type: mongoose.Schema.Types.ObjectId,
@@ -32,7 +32,28 @@ const OrganizationSchema = new mongoose.Schema(
           required: true
         },
         enabled: { type: Boolean, default: true },
-        added_at: { type: Date, default: Date.now }
+        added_at: { type: Date, default: Date.now },
+        // Purchase/subscription details
+        purchase_details: {
+          purchased_at: { type: Date, default: Date.now },
+          purchased_by: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Admin",
+            default: null
+          },
+          cost: { type: Number, default: 0 },
+          billing_cycle: {
+            type: String,
+            enum: ['one-time', 'monthly', 'yearly'],
+            default: 'monthly'
+          }
+        },
+        // Usage tracking
+        usage_stats: {
+          total_downloads: { type: Number, default: 0 },
+          active_users: { type: Number, default: 0 },
+          last_used: { type: Date, default: null }
+        }
       }],
       // User limits and permissions
       limits: {

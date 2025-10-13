@@ -31,7 +31,8 @@ import {
   Info,
   Tag,
   Settings,
-  Trash2
+  Trash2,
+  X
 } from "lucide-react";
 import { getAvailableModels, getUserPulledModels, addPulledModel, removePulledModel, pullModelWithProgress, removeModelFromSystem, type AvailableModel, type PulledModel, type PullProgress } from "@/services/models";
 

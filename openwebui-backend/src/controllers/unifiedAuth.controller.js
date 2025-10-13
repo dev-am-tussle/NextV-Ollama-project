@@ -38,7 +38,6 @@ async function handleAdminLogin(req, res, email, password) {
   try {
     // Find admin by email
     const admin = await Admin.findActiveByEmail(email)
-      .populate('settings_id')
       .populate('organization_id');
 
     if (!admin) {
@@ -200,7 +199,6 @@ async function getAdminProfile(req, res) {
   try {
     const admin = await Admin.findById(req.user.sub)
       .select('-password_hash')
-      .populate('settings_id')
       .populate('organization_id');
 
     if (!admin) {
@@ -251,8 +249,7 @@ async function getAdminProfile(req, res) {
 async function getUserProfile(req, res) {
   try {
     const user = await User.findById(req.user.sub)
-      .select('-password_hash')
-      .populate('settings_id');
+      .select('-password_hash');
 
     if (!user) {
       return res.status(404).json({

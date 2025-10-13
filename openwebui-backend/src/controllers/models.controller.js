@@ -1,5 +1,11 @@
 import { AvailableModel } from "../models/availableModel.model.js";
 import { pullModel, verifyModelInstalled, removeModel } from "../services/ollama.service.js";
+import { 
+  getUserCategorizedModels, 
+  getAdminCategorizedModels,
+  markModelAsDownloaded,
+  updateModelUsage 
+} from "../services/modelManagement.service.js";
 
 // GET /api/v1/models - Users see active models
 export async function getActiveModels(req, res) {
@@ -165,6 +171,103 @@ export async function removeModelFromSystem(req, res) {
       error: error.userMessage || error.message || "Failed to remove model",
       code: error.code || 'REMOVE_ERROR',
       suggestions: error.suggestions || ['Try again later', 'Contact support']
+    });
+  }
+}
+
+// GET /api/v1/models/categorized - Get categorized models for user dropdown
+export async function getUserCategorizedModelsController(req, res) {
+  try {
+    const userId = req.user.id; // From auth middleware
+    
+    const categorizedModels = await getUserCategorizedModels(userId);
+    
+    res.json({
+      success: true,
+      data: categorizedModels
+    });
+  } catch (error) {
+    console.error("Error fetching user categorized models:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch categorized models"
+    });
+  }
+}
+
+// GET /api/v1/models/admin-categorized - Get categorized models for admin dropdown
+export async function getAdminCategorizedModelsController(req, res) {
+  try {
+    const adminId = req.admin?.id || req.user?.id; // Support both admin and user tokens
+    
+    const categorizedModels = await getAdminCategorizedModels(adminId);
+    
+    res.json({
+      success: true,
+      data: categorizedModels
+    });
+  } catch (error) {
+    console.error("Error fetching admin categorized models:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Failed to fetch admin categorized models"
+    });
+  }
+}
+
+// POST /api/v1/models/mark-downloaded - Mark a model as downloaded by user
+export async function markModelAsDownloadedController(req, res) {
+  try {
+    const userId = req.user.id;
+    const { modelId, downloadInfo } = req.body;
+    
+    if (!modelId) {
+      return res.status(400).json({
+        success: false,
+        error: "Model ID is required"
+      });
+    }
+    
+    const result = await markModelAsDownloaded(userId, modelId, downloadInfo);
+    
+    res.json({
+      success: true,
+      message: "Model marked as downloaded successfully",
+      data: result
+    });
+  } catch (error) {
+    console.error("Error marking model as downloaded:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Failed to mark model as downloaded"
+    });
+  }
+}
+
+// POST /api/v1/models/update-usage - Update model usage stats
+export async function updateModelUsageController(req, res) {
+  try {
+    const userId = req.user.id;
+    const { modelId } = req.body;
+    
+    if (!modelId) {
+      return res.status(400).json({
+        success: false,
+        error: "Model ID is required"
+      });
+    }
+    
+    await updateModelUsage(userId, modelId);
+    
+    res.json({
+      success: true,
+      message: "Model usage updated successfully"
+    });
+  } catch (error) {
+    console.error("Error updating model usage:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Failed to update model usage"
     });
   }
 }

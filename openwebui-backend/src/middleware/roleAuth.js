@@ -75,8 +75,7 @@ export function requireAdmin(req, res, next) {
     try {
       // Check if user is an admin
       const admin = await Admin.findById(req.user.id)
-        .select('-password_hash')
-        .populate('settings_id');
+        .select('-password_hash');
       
       if (!admin || admin.status !== 'active' || admin.deleted_at) {
         return res.status(403).json({ 
@@ -120,8 +119,7 @@ export function requireSuperAdminUser(req, res, next) {
 
       // Check if user is a super admin in User collection
       const user = await User.findById(req.user.id)
-        .select('-password_hash')
-        .populate('settings_id');
+        .select('-password_hash');
       
       if (!user || user.status !== 'active') {
         return res.status(403).json({ 
@@ -193,8 +191,7 @@ export function requireEmployee(req, res, next) {
     try {
       // Check if user is an employee
       const user = await User.findById(req.user.id)
-        .select('-password_hash')
-        .populate('settings_id');
+        .select('-password_hash');
       
       if (!user || user.role !== 'employee' || user.status !== 'active') {
         return res.status(403).json({ 

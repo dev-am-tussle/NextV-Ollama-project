@@ -6,7 +6,6 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { name: "Dashboard", href: "/superadmin", icon: LayoutDashboard },
   { name: "Models", href: "/superadmin", icon: Package },
   { name: "Organizations", href: "/superadmin/organizations", icon: Building2 },
   { name: "Conversations", href: "/superadmin/conversations", icon: MessageSquare },

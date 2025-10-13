@@ -6,38 +6,10 @@ import { Conversation } from "../models/conversation.model.js";
 import { UserSettings } from "../models/user.models.js";
 import { SavedPrompt } from "../models/savedPrompt.model.js";
 import { FileMeta } from "../models/file.model.js";
+import { Organization } from "../models/organization.model.js";
 import { exchangeCodeForToken, getMicrosoftProfile } from "./oauth.service.js";
 
 const ROUNDS = Number(process.env.BCRYPT_ROUNDS || 12);
-
-// Helper function to setup default pulled models for new users
-async function setupDefaultPulledModels(userId) {
-  try {
-    const defaultModelNames = ["gemma:2b", "phi:2.7b"];
-    const defaultModels = await AvailableModel.find({ 
-      name: { $in: defaultModelNames },
-      is_active: true 
-    });
-    
-    if (defaultModels.length > 0) {
-      const pulledModels = defaultModels.map(model => ({
-        model_id: model._id,
-        pulled_at: new Date(),
-        usage_count: 0,
-        last_used: null
-      }));
-      
-      await UserSettings.updateOne(
-        { user_id: userId },
-        { $set: { pulled_models: pulledModels } }
-      );
-      
-      console.log(`✅ Setup ${pulledModels.length} default models for user ${userId}`);
-    }
-  } catch (error) {
-    console.error("Failed to setup default pulled models:", error);
-  }
-}
 
 function signToken(user) {
   return jwt.sign(
@@ -81,7 +53,7 @@ export async function loginUser({ email, password }) {
   if (!email || !password) throw new Error("Invalid credentials");
   email = email.toLowerCase().trim();
 
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email }).populate('organization_id').lean();
   if (!user) throw new Error("Invalid credentials");
 
   const ok = await bcrypt.compare(password, user.password_hash);
@@ -91,28 +63,14 @@ export async function loginUser({ email, password }) {
 
   // gather profile, settings with populated pulled models
   let settings = null;
-  if (user.settings_id) {
-    settings = await UserSettings.findById(user.settings_id)
-      .populate({
-        path: 'pulled_models.model_id',
-        model: 'AvailableModel',
-        select: 'name display_name description size category tags performance_tier provider model_family parameters use_cases min_ram_gb'
-      })
-      .lean();
-    
-    // If no pulled models found, setup default models
-    if (!settings.pulled_models || settings.pulled_models.length === 0) {
-      await setupDefaultPulledModels(user._id);
-      // Re-fetch settings with populated models
-      settings = await UserSettings.findById(user.settings_id)
-        .populate({
-          path: 'pulled_models.model_id',
-          model: 'AvailableModel',
-          select: 'name display_name description size category tags performance_tier provider model_family parameters use_cases min_ram_gb'
-        })
-        .lean();
-    }
-  }
+  // Find settings by user_id instead of using settings_id reference
+  settings = await UserSettings.findOne({ user_id: user._id })
+    .populate({
+      path: 'pulled_models.model_id',
+      model: 'AvailableModel',
+      select: 'name display_name description size category tags performance_tier provider model_family parameters use_cases min_ram_gb'
+    })
+    .lean();
 
   const [conversationsCount, savedPromptsCount, savedFilesCount] =
     await Promise.all([
@@ -139,8 +97,19 @@ export async function loginUser({ email, password }) {
       id: user._id,
       name: user.name,
       email: user.email,
+      role: user.role,
+      organization_id: user.organization_id?._id,
       created_at: user.created_at,
+      config_check: user.config_check, // Add onboarding status
     },
+    organization: user.organization_id ? {
+      id: user.organization_id._id,
+      name: user.organization_id.name,
+      slug: user.organization_id.slug,
+      settings: user.organization_id.settings,
+      subscription: user.organization_id.subscription,
+      status: user.organization_id.status
+    } : null,
     settings,
     meta: {
       conversations_count: conversationsCount,
@@ -272,12 +241,10 @@ export async function getUserProfile(userId) {
     .sort({ updated_at: -1 })
     .lean();
 
-  // fetch settings if linked
+  // fetch settings by user_id instead of settings_id reference
   let settings = null;
   try {
-    if (user.settings_id) {
-      settings = await UserSettings.findById(user.settings_id).lean();
-    }
+    settings = await UserSettings.findOne({ user_id: userId }).lean();
   } catch (e) {
     // non-fatal: we'll just return null settings
     settings = null;

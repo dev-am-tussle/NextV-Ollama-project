@@ -2,10 +2,11 @@ import React from "react";
 import BaseChatInterface from "@/components/chat/BaseChatInterface";
 import { useAuth } from "@/providers/AuthProvider";
 import { useToast } from "@/hooks/use-toast";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { createChatService } from "@/services/chatService";
 
 const UserChat: React.FC = () => {
+  const { slug } = useParams<{ slug: string }>();
   const {
     isAuthenticated,
     user,

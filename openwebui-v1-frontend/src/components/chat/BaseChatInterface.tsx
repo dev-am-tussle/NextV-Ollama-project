@@ -3,7 +3,7 @@ import { GitCompare, XCircle } from "lucide-react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
-import { modelIcon } from "@/components/chat/model-selector";
+import { modelIcon } from "@/components/chat/categorized-model-selector";
 import { ChatSidebar } from "@/components/chat/sidebar";
 import { FileManagerDialog } from "@/components/chat/file-manager-dialog";
 import { PromptsDialog, PromptItem } from "@/components/chat/prompts-dialog";

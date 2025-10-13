@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { Admin, AdminSettings } from "../models/admin.model.js";
+import { Admin } from "../models/admin.model.js";
+import { AdminSettings } from "../models/adminSettings.model.js";
 import { Organization } from "../models/organization.model.js";
 import { User } from "../models/user.models.js";
 
@@ -18,7 +19,6 @@ export async function adminLogin(req, res) {
 
     // Find admin by email
     const admin = await Admin.findActiveByEmail(email)
-      .populate('settings_id')
       .populate('organization_id');
 
     if (!admin) {
@@ -112,7 +112,6 @@ export async function getAdminProfile(req, res) {
   try {
     const admin = await Admin.findById(req.user.id)
       .select('-password_hash')
-      .populate('settings_id')
       .populate('organization_id');
 
     if (!admin) {

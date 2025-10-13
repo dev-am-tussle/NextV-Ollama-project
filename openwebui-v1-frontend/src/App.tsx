@@ -6,13 +6,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { AppProvider } from "@/providers/AppProvider";
 import { AuthProvider } from "@/providers/AuthProvider";
-import { Header } from "@/components/Header";
-import { Footer } from "@/components/Footer";
-import Home from "./pages/Home";
 import Login from "./pages/auth/Login";
-import Signup from "./pages/auth/Signup";
 import AcceptInvite from "./pages/auth/AcceptInvite";
 import UserChat from "./pages/UserChat";
+import OnboardingPage from "./pages/OnboardingPage";
 import LegacyRedirect from "@/components/routing/LegacyRedirect";
 import ProtectedRoute from "@/components/routing/ProtectedRoute";
 import SuperAdminProtectedRoute from "@/components/routing/SuperAdminProtectedRoute";
@@ -29,25 +26,37 @@ const queryClient = new QueryClient();
 
 const AppContent = () => {
   const location = useLocation();
-  // hide footer on auth pages (login, signup and any /auth/* routes)
-  const hideFooter = location.pathname.startsWith("/auth") || location.pathname === "/" || location.pathname.startsWith("/superadmin") || location.pathname.includes("/org-admin") || location.pathname === "/accept-invite";
-  // Also hide header on auth pages to avoid any timing issues
-  const hideHeader =
-    location.pathname.startsWith("/auth") || location.pathname === "/" || location.pathname.startsWith("/superadmin") || location.pathname.includes("/org-admin") || location.pathname === "/accept-invite";
 
   return (
     <div className="min-h-screen flex flex-col w-full">
-      {!hideHeader && <Header />}
       <main className="flex-1">
         <Routes>
-          <Route path="/home" element={<Home />} />
           <Route path="/auth/login" element={<Login />} />
-          <Route path="/auth/signup" element={<Signup />} />
           <Route path="/accept-invite" element={<AcceptInvite />} />
           
-          {/* User Chat Route */}
+          {/* Onboarding Route */}
           <Route
-            path="/user/chat"
+            path="/onboarding"
+            element={
+              <ProtectedRoute>
+                <OnboardingPage />
+              </ProtectedRoute>
+            }
+          />
+          
+          {/* Chat Route */}
+          {/* <Route
+            path="/chat"
+            element={
+              <ProtectedRoute>
+                <UserChat />
+              </ProtectedRoute>
+            }
+          /> */}
+          
+          {/* Organization User Chat Route */}
+          <Route
+            path="/:slug/org-user"
             element={
               <ProtectedRoute>
                 <UserChat />
@@ -55,7 +64,7 @@ const AppContent = () => {
             }
           />
           
-          {/* Legacy Chat Route - smart redirect based on user type */}
+          {/* Legacy Routes - smart redirect to organization-based routes */}
           <Route
             path="/"
             element={
@@ -92,7 +101,6 @@ const AppContent = () => {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
-      {!hideFooter && <Footer />}
     </div>
   );
 };

@@ -174,7 +174,18 @@ export function getStoredAdminProfile() {
 // Get stored user profile
 export function getStoredUserProfile() {
   const authProfile = localStorage.getItem('authProfile');
-  return authProfile ? JSON.parse(authProfile) : null;
+  const userProfile = authProfile ? JSON.parse(authProfile) : null;
+  
+  // Return the user profile with organization data if available
+  if (userProfile) {
+    return {
+      ...userProfile,
+      // Ensure organization is at the top level for compatibility
+      organization: userProfile.organization || null
+    };
+  }
+  
+  return null;
 }
 
 // Get stored organization

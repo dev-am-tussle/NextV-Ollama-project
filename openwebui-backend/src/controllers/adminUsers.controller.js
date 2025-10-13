@@ -14,7 +14,6 @@ export async function getAllUsers(req, res) {
     // Fetch users with their settings
     const users = await User.find({})
       .select('-password_hash') // Exclude password hash for security
-      .populate('settings_id')
       .sort({ created_at: -1 })
       .skip(skip)
       .limit(limit)
@@ -89,7 +88,6 @@ export async function getUserById(req, res) {
 
     const user = await User.findById(id)
       .select('-password_hash')
-      .populate('settings_id')
       .lean();
 
     if (!user) {

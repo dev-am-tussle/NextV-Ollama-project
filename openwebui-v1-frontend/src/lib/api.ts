@@ -31,10 +31,20 @@ async function apiFetch(endpoint: string, opts: RequestInit = {}) {
   finalOpts.headers = headers;
 
   // Normalize endpoint into a full URL
-  const url =
-    endpoint.startsWith("http://") || endpoint.startsWith("https://")
-      ? endpoint
-      : `${API_BASE.replace(/\/$/, "")}/api/v1/${endpoint.replace(/^\/+/, "")}`;
+  let url: string;
+  if (endpoint.startsWith("http://") || endpoint.startsWith("https://")) {
+    url = endpoint;
+  } else {
+    // Handle different API prefixes
+    const cleanEndpoint = endpoint.replace(/^\/+/, "");
+    if (cleanEndpoint.startsWith("onboarding/")) {
+      // Onboarding endpoints don't use /v1 prefix
+      url = `${API_BASE.replace(/\/$/, "")}/api/${cleanEndpoint}`;
+    } else {
+      // Regular v1 endpoints
+      url = `${API_BASE.replace(/\/$/, "")}/api/v1/${cleanEndpoint}`;
+    }
+  }
 
   const res = await fetch(url, {
     credentials: "include",

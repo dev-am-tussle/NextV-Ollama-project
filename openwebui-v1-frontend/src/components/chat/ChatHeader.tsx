@@ -1,6 +1,6 @@
 ﻿import React from "react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { ModelSelector } from "./model-selector";
+import { CategorizedModelSelector } from "./categorized-model-selector";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Share2, HelpCircle, Sliders, LogOut, Settings2 } from "lucide-react";
@@ -47,10 +47,9 @@ export const ChatHeader: React.FC<Props> = ({
       <div className="flex items-center space-x-4">
         {/* <SidebarTrigger /> */}
         <div className="flex items-center gap-3">
-          <ModelSelector
+          <CategorizedModelSelector
             selected={selectedModel}
             onSelect={onSelectModel}
-            availableModels={availableModels}
             compareMode={compareMode}
             onToggleCompare={onToggleCompare}
           />

@@ -66,11 +66,25 @@ export async function login(payload: LoginPayload): Promise<AuthResponse> {
     setAuthToken(token);
   }
 
-  // Persist the full login response (user, settings, meta) so the frontend
+  // Persist the full login response (user, settings, meta, organization) so the frontend
   // can use it instead of calling /auth/me. This simplifies the auth flow.
   try {
-    if (res) localStorage.setItem("authProfile", JSON.stringify(res));
-    else localStorage.removeItem("authProfile");
+    if (res) {
+      // Store the complete auth profile including organization data
+      localStorage.setItem("authProfile", JSON.stringify(res));
+      
+      // For unified auth compatibility, also store user type
+      localStorage.setItem("userType", "user");
+      
+      // Store organization data separately if available for compatibility
+      if (res.organization) {
+        localStorage.setItem("userOrganization", JSON.stringify(res.organization));
+      }
+    } else {
+      localStorage.removeItem("authProfile");
+      localStorage.removeItem("userType");
+      localStorage.removeItem("userOrganization");
+    }
   } catch (_) {}
 
   return res;
@@ -88,6 +102,8 @@ export async function logout(): Promise<void> {
     setAuthToken(null);
     try {
       localStorage.removeItem("authProfile");
+      localStorage.removeItem("userType");
+      localStorage.removeItem("userOrganization");
     } catch (_) {}
   }
 }

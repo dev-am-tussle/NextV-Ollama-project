@@ -10,21 +10,25 @@ const UserSettingsSchema = new mongoose.Schema(
     },
     theme: { type: String, default: "light" },
     default_model: { type: String, default: "gemma:2b" },
-    // User's available models from organization
-    available_models: [{
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "AvailableModel"
+    // User's pulled/downloaded models (empty by default until user downloads)
+    pulled_models: [{
+      model_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "AvailableModel",
+        required: true
+      },
+      pulled_at: { type: Date, default: Date.now },
+      usage_count: { type: Number, default: 0 },
+      last_used: { type: Date, default: null },
+      // Local file info for downloaded models
+      local_path: { type: String, default: null },
+      file_size: { type: Number, default: 0 }, // in bytes
+      download_status: { 
+        type: String, 
+        enum: ['downloading', 'completed', 'failed'],
+        default: 'completed'
+      }
     }],
-    saved_prompts_ref: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "SavedPrompt",
-      default: null,
-    },
-    saved_files_ref: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "FileMeta",
-      default: null,
-    },
     created_at: { type: Date, default: Date.now },
     updated_at: { type: Date, default: Date.now },
   },
@@ -75,12 +79,6 @@ const UserSchema = new mongoose.Schema(
         ref: "User",
         default: null
       },
-      // Admin settings reference for hierarchy and permissions
-      admin_settings_id: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "AdminSettings",
-        default: null
-      },
       // Current invitation reference
       current_invitation_id: {
         type: mongoose.Schema.Types.ObjectId,
@@ -104,12 +102,17 @@ const UserSchema = new mongoose.Schema(
         linked_at: { type: Date, default: Date.now },
       },
     ],
-    // flag useful when provider verified email (or after email confirmation)
+    // flag useful when provider verified email (or after email confirmation) 
     email_verified: { type: Boolean, default: false },
-    settings_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "UserSettings",
-      default: null,
+    // First-time login configuration check
+    config_check: {
+      completed: { type: Boolean, default: false },
+      steps: {
+        ollama_installed: { type: Boolean, default: false },
+        models_selected: { type: Boolean, default: false },
+        models_downloaded: { type: Boolean, default: false }
+      },
+      completed_at: { type: Date, default: null }
     },
     created_at: { type: Date, default: Date.now },
     updated_at: { type: Date, default: Date.now },
@@ -131,7 +134,7 @@ UserSchema.pre("save", function (next) {
   next();
 });
 
-// Helper: create user + default settings
+// Helper: create user + default settings (no circular reference)
 async function createUserWithDefaults(userData) {
   const User = mongoose.models.User || mongoose.model("User", UserSchema);
   const UserSettings =
@@ -141,20 +144,16 @@ async function createUserWithDefaults(userData) {
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
+    // Create user first
     const user = await User.create([userData], { session });
+    
+    // Create corresponding settings
     const settings = await UserSettings.create(
       [
         {
           user_id: user[0]._id,
         },
       ],
-      { session }
-    );
-
-    // link settings back to user
-    await User.updateOne(
-      { _id: user[0]._id },
-      { $set: { settings_id: settings[0]._id } },
       { session }
     );
 

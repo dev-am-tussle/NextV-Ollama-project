@@ -97,7 +97,6 @@ export async function getOrganizationById(req, res) {
       deleted_at: null
     })
     .select('-password_hash')
-    .populate('settings_id')
     .sort({ created_at: -1 });
 
     // Get recent employees
@@ -106,7 +105,6 @@ export async function getOrganizationById(req, res) {
       role: 'employee'
     })
     .select('-password_hash')
-    .populate('settings_id')
     .sort({ created_at: -1 })
     .limit(10);
 
@@ -334,7 +332,7 @@ export async function updateOrganization(req, res) {
 }
 
 // DELETE /api/super-admin/organizations/:id - Delete organization
-export async function deleteOrganization(req, res) {
+export async function deleteOrganization(req, res) { 
   try {
     const { id } = req.params;
 
@@ -529,7 +527,6 @@ export async function getOrganizationEmployees(req, res) {
       role: 'employee'
     })
     .select('-password_hash')
-    .populate('settings_id')
     .populate('employee_details.invited_by', 'name email')
     .sort({ created_at: -1 })
     .skip(skip)
@@ -574,7 +571,6 @@ export async function getOrganizationAdmins(req, res) {
       deleted_at: null
     })
     .select('-password_hash')
-    .populate('settings_id')
     .populate('created_by', 'name email')
     .sort({ created_at: -1 })
     .skip(skip)

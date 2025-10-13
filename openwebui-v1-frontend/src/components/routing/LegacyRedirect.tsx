@@ -1,11 +1,12 @@
 import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { getCurrentUserType } from "@/services/unifiedAuth";
+import { getCurrentUserType, getStoredAdminProfile, getStoredUserProfile } from "@/services/unifiedAuth";
 
 /**
  * LegacyRedirect component for root path "/"
- * Redirects all users to user chat interface
- * Admins can access their organization admin panel via /:slug/org-admin
+ * Redirects users to their organization-based routes
+ * - Admins: /:orgSlug/org-admin
+ * - Users: /:orgSlug/org-user
  */
 const LegacyRedirect: React.FC = () => {
   const navigate = useNavigate();
@@ -13,9 +14,32 @@ const LegacyRedirect: React.FC = () => {
   useEffect(() => {
     const userType = getCurrentUserType();
     
-    // All users (including admins) go to user chat now
-    // Admins can access their organization admin panel via /:slug/org-admin
-    navigate('/user/chat', { replace: true });
+    if (userType === 'admin') {
+      // Get admin's organization slug
+      const adminProfile = getStoredAdminProfile();
+      const orgSlug = adminProfile?.organization?.slug;
+      
+      if (orgSlug) {
+        navigate(`/${orgSlug}/org-admin`, { replace: true });
+      } else {
+        // Fallback if no organization slug found
+        navigate('/auth/login', { replace: true });
+      }
+    } else if (userType === 'user') {
+      // Get user's organization slug
+      const userProfile = getStoredUserProfile();
+      const orgSlug = userProfile?.organization?.slug;
+      
+      if (orgSlug) {
+        navigate(`/${orgSlug}/org-user`, { replace: true });
+      } else {
+        // Fallback if no organization slug found
+        navigate('/auth/login', { replace: true });
+      }
+    } else {
+      // No valid user type, redirect to login
+      navigate('/auth/login', { replace: true });
+    }
   }, [navigate]);
 
   // Show loading state while redirecting
@@ -23,7 +47,7 @@ const LegacyRedirect: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-        <p className="text-muted-foreground">Redirecting to chat...</p>
+        <p className="text-muted-foreground">Redirecting to your organization...</p>
       </div>
     </div>
   );

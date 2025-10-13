@@ -67,7 +67,7 @@ const Login = () => {
           
           // Get organization slug for redirect
           const orgSlug = response.data.organization?.slug;
-          const redirectPath = orgSlug ? `/${orgSlug}/org-admin` : '/admin/chat';
+          const redirectPath = orgSlug ? `/${orgSlug}/org-admin` : '/';
           
           // Small delay to ensure localStorage is set, then navigate
           setTimeout(() => {
@@ -97,9 +97,14 @@ const Login = () => {
           description: "You have been successfully logged in.",
         });
         
-        // Small delay to ensure everything is set, then navigate
+        // Get organization slug from profile for redirect
+        const profile = JSON.parse(localStorage.getItem("authProfile") || "{}");
+        const orgSlug = profile?.organization?.slug;
+        
+        // Small delay to ensure everything is set, then navigate to org-based route
         setTimeout(() => {
-          navigate("/user/chat");
+          const redirectPath = orgSlug ? `/${orgSlug}/org-user` : '/';
+          navigate(redirectPath);
         }, 100);
       }
     } catch (error: any) {
@@ -272,29 +277,8 @@ const Login = () => {
                 </form>
               </TabsContent>
             </Tabs>
-
-            <div className="mt-6 text-center text-sm">
-              <span className="text-muted-foreground">
-                Don't have an account?{" "}
-              </span>
-              <Link
-                to="/auth/signup"
-                className="text-primary hover:underline font-medium"
-              >
-                Sign up
-              </Link>
-            </div>
           </CardContent>
         </Card>
-
-        <div className="text-center">
-          <Link
-            to="/home"
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            ← Back to home
-          </Link>
-        </div>
         
         {/* Microsoft OAuth button - only show for user login */}
         {userType === 'user' && (

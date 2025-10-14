@@ -1,4 +1,6 @@
 import { AvailableModel } from "../models/availableModel.model.js";
+import { User, UserSettings } from "../models/user.models.js";
+import { Organization } from "../models/organization.model.js";
 import { pullModel, verifyModelInstalled, removeModel } from "../services/ollama.service.js";
 import { 
   getUserCategorizedModels, 
@@ -268,6 +270,93 @@ export async function updateModelUsageController(req, res) {
     res.status(500).json({
       success: false,
       error: error.message || "Failed to update model usage"
+    });
+  }
+}
+
+// GET /api/v1/models/user/:id/list - Get categorized models for specific user
+export async function getUserModelsList(req, res) {
+  try {
+    const { id: userId } = req.params;
+    
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: "User ID is required"
+      });
+    }
+
+    // Find the user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: "User not found"
+      });
+    }
+
+    // Get user settings to find pulled models
+    const userSettings = await UserSettings.findOne({ user_id: userId });
+    const pulledModelIds = userSettings?.pulled_models?.map(pm => pm.model_id.toString()) || [];
+
+    // Get organization and its allowed models
+    let orgAllowedModelIds = [];
+    let organization = null;
+    if (user.organization_id) {
+      organization = await Organization.findById(user.organization_id);
+      orgAllowedModelIds = organization?.settings?.allowed_models
+        ?.filter(am => am.enabled)
+        ?.map(am => am.model_id.toString()) || [];
+    }
+
+    // Get all available models
+    const allModels = await AvailableModel.find({ is_active: true })
+      .select('-created_at -updated_at')
+      .sort({ model_family: 1, parameters: 1 });
+
+    // Categorize models
+    const downloaded = [];
+    const availableToDownload = [];
+    const availableGlobal = [];
+
+    allModels.forEach(model => {
+      const modelIdStr = model._id.toString();
+      
+      if (pulledModelIds.includes(modelIdStr)) {
+        // User has downloaded this model
+        downloaded.push(model);
+      } else if (orgAllowedModelIds.includes(modelIdStr)) {
+        // Model is in org's allowed list but not downloaded
+        availableToDownload.push(model);
+      } else {
+        // Model is globally available but not in org's allowed list
+        availableGlobal.push(model);
+      }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        downloaded,
+        availableToDownload,
+        availableGlobal
+      },
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        organization: organization ? {
+          id: organization._id,
+          name: organization.name
+        } : null
+      }
+    });
+
+  } catch (error) {
+    console.error("Error fetching user models list:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Failed to fetch user models list"
     });
   }
 }

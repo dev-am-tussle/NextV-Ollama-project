@@ -193,8 +193,8 @@ const ModelDetailPanel: React.FC<{
             <span className="text-sm font-medium text-blue-900 dark:text-blue-100">Available to Download</span>
           </div>
           <div className="space-y-1 text-xs text-blue-700 dark:text-blue-300">
-            <p>Purchased: {new Date((model as AvailableToDownloadModel).purchased_at).toLocaleDateString()}</p>
-            <p>Cost: {formatPrice((model as AvailableToDownloadModel).org_purchase_details.cost)} ({(model as AvailableToDownloadModel).org_purchase_details.billing_cycle})</p>
+            <p>Available for your organization</p>
+            <p>{model.size} • {model.category}</p>
           </div>
         </div>
       )}
@@ -208,15 +208,15 @@ const ModelDetailPanel: React.FC<{
           <div className="space-y-2">
             <div className="grid grid-cols-3 gap-2 text-xs">
               <div className="text-center p-2 bg-white dark:bg-gray-800 rounded border">
-                <p className="font-medium">{formatPrice((model as AvailableForPurchaseModel).pricing.monthly)}</p>
+                <p className="font-medium">{(model as AvailableForPurchaseModel).pricing?.monthly ? formatPrice((model as AvailableForPurchaseModel).pricing.monthly) : 'N/A'}</p>
                 <p className="text-muted-foreground">Monthly</p>
               </div>
               <div className="text-center p-2 bg-white dark:bg-gray-800 rounded border">
-                <p className="font-medium">{formatPrice((model as AvailableForPurchaseModel).pricing.yearly)}</p>
+                <p className="font-medium">{(model as AvailableForPurchaseModel).pricing?.yearly ? formatPrice((model as AvailableForPurchaseModel).pricing.yearly) : 'N/A'}</p>
                 <p className="text-muted-foreground">Yearly</p>
               </div>
               <div className="text-center p-2 bg-white dark:bg-gray-800 rounded border">
-                <p className="font-medium">{formatPrice((model as AvailableForPurchaseModel).pricing.one_time)}</p>
+                <p className="font-medium">{(model as AvailableForPurchaseModel).pricing?.one_time ? formatPrice((model as AvailableForPurchaseModel).pricing.one_time) : 'N/A'}</p>
                 <p className="text-muted-foreground">One-time</p>
               </div>
             </div>
@@ -418,8 +418,8 @@ const CategorizedModelSelector: React.FC<CategorizedModelSelectorProps> = ({
     // Look for selected model in all categories
     const allModels = [
       ...modelsData.data.downloaded,
-      ...modelsData.data.available_to_download,
-      ...modelsData.data.available_for_purchase
+        ...modelsData.data.availableToDownload,
+      ...modelsData.data.availableGlobal
     ];
     
     return allModels.find(model => model.name === selected) || 
@@ -610,7 +610,7 @@ const CategorizedModelSelector: React.FC<CategorizedModelSelectorProps> = ({
         >
           {/* Organization Info */}
           <div className="px-2 py-2 text-xs text-muted-foreground border-b mb-2">
-            Organization: <span className="font-medium">{modelsData.organization.name}</span>
+            Organization: <span className="font-medium">{modelsData.user.organization?.name || 'No Organization'}</span>
           </div>
 
           {/* Downloaded Models Section */}
@@ -652,12 +652,12 @@ const CategorizedModelSelector: React.FC<CategorizedModelSelectorProps> = ({
           )}
 
           {/* Available to Download Section */}
-          {modelsData.data.available_to_download.length > 0 && (
+          {modelsData.data.availableToDownload.length > 0 && (
             <>
               <div className="px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Available to Download ({modelsData.data.available_to_download.length})
+                Available to Download ({modelsData.data.availableToDownload.length})
               </div>
-              {modelsData.data.available_to_download.map((model) => (
+              {modelsData.data.availableToDownload.map((model) => (
                 <DropdownMenuItem
                   key={model._id}
                   onClick={() => handleModelClick(model, 'available')}
@@ -683,12 +683,12 @@ const CategorizedModelSelector: React.FC<CategorizedModelSelectorProps> = ({
           )}
 
           {/* Available for Purchase Section */}
-          {modelsData.data.available_for_purchase.length > 0 && (
+          {modelsData.data.availableGlobal.length > 0 && (
             <>
               <div className="px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Available (For Purchase) ({modelsData.data.available_for_purchase.length})
+                Available (Global) ({modelsData.data.availableGlobal.length})
               </div>
-              {modelsData.data.available_for_purchase.slice(0, 5).map((model) => (
+              {modelsData.data.availableGlobal.slice(0, 5).map((model) => (
                 <DropdownMenuItem
                   key={model._id}
                   onClick={() => handleModelClick(model, 'purchase')}
@@ -699,20 +699,20 @@ const CategorizedModelSelector: React.FC<CategorizedModelSelectorProps> = ({
                     <div>
                       <p className="font-medium">{model.display_name}</p>
                       <p className="text-xs text-muted-foreground">
-                        From {formatPrice(model.pricing.monthly)}/mo
+                        {model.pricing?.monthly ? `From ${formatPrice(model.pricing.monthly)}/mo` : model.size}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     {model.popular && <Star className="h-3 w-3 text-amber-500" />}
                     {model.recommended && <Badge variant="secondary" className="text-xs">Rec</Badge>}
-                    <ShoppingCart className="h-3 w-3 text-muted-foreground" />
+                    <Download className="h-3 w-3 text-muted-foreground" />
                   </div>
                 </DropdownMenuItem>
               ))}
-              {modelsData.data.available_for_purchase.length > 5 && (
-                <div className="px-2 py-1 text-xs text-muted-foreground text-center">
-                  +{modelsData.data.available_for_purchase.length - 5} more models available
+              {modelsData.data.availableGlobal.length > 5 && (
+                <div className="px-3 py-2 text-xs text-muted-foreground border-t">
+                  +{modelsData.data.availableGlobal.length - 5} more models available
                 </div>
               )}
             </>

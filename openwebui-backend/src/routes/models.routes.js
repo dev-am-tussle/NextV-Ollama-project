@@ -10,6 +10,7 @@ router.get("/", modelsController.getActiveModels);
 // Protected endpoints for categorized model data
 router.get("/categorized", requireAuth, modelsController.getUserCategorizedModelsController);
 router.get("/admin-categorized", requireAuth, modelsController.getAdminCategorizedModelsController);
+router.get("/user/:id/list", requireAuth, modelsController.getUserModelsList);
 
 // Protected endpoints for model management
 router.post("/pull", requireAuth, modelsController.pullModelWithProgress);

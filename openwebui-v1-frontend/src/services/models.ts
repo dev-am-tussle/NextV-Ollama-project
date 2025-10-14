@@ -207,7 +207,7 @@ export async function pullModelWithProgress(
   const { onProgress, onError, onComplete } = callbacks;
   
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/v1/models/pull`, {
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/models/pull`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -282,4 +282,27 @@ export async function removeModelFromSystem(modelName: string): Promise<{ succes
     method: "DELETE",
     body: JSON.stringify({ modelName }),
   });
+}
+
+// Get categorized models for a specific user
+export interface CategorizedModelsResponse {
+  success: boolean;
+  data: {
+    downloaded: AvailableModel[];
+    availableToDownload: AvailableModel[];
+    availableGlobal: AvailableModel[];
+  };
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    organization: {
+      id: string;
+      name: string;
+    } | null;
+  };
+}
+
+export async function getUserCategorizedModels(userId: string): Promise<CategorizedModelsResponse> {
+  return apiFetch(`available-models/user/${userId}/list`);
 }

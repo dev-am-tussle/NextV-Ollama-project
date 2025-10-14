@@ -34,7 +34,7 @@ import {
   Trash2,
   X
 } from "lucide-react";
-import { getAvailableModels, getUserPulledModels, addPulledModel, removePulledModel, pullModelWithProgress, removeModelFromSystem, type AvailableModel, type PulledModel, type PullProgress } from "@/services/models";
+import { getAvailableModels, getUserPulledModels, addPulledModel, removePulledModel, pullModelWithProgress, removeModelFromSystem, getUserCategorizedModels, type AvailableModel, type PulledModel, type PullProgress } from "@/services/models";
 
 // Extend the AvailableModel interface for frontend usage
 interface ModelWithPullStatus extends AvailableModel {
@@ -277,47 +277,77 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 }) => {
   const [allModels, setAllModels] = useState<ModelWithPullStatus[]>([]);
   const [userPulledModels, setUserPulledModels] = useState<PulledModel[]>([]);
+  const [downloadedModels, setDownloadedModels] = useState<ModelWithPullStatus[]>([]);
+  const [availableToDownloadModels, setAvailableToDownloadModels] = useState<ModelWithPullStatus[]>([]);
+  const [availableGlobalModels, setAvailableGlobalModels] = useState<ModelWithPullStatus[]>([]);
   const [selectedModelDetail, setSelectedModelDetail] = useState<ModelWithPullStatus | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [pullingModels, setPullingModels] = useState<Set<string>>(new Set());
   const [pullProgress, setPullProgress] = useState<Map<string, PullProgress>>(new Map());
   const [loading, setLoading] = useState(false);
 
-  // Fetch available models and user's pulled models from backend
+  // Fetch categorized models for the current user
   useEffect(() => {
     const fetchModels = async () => {
       try {
         setLoading(true);
         
-        // Fetch both available models and user's pulled models
-        const [availableResponse, pulledResponse] = await Promise.all([
-          getAvailableModels(),
-          getUserPulledModels().catch(err => {
-            console.warn('Failed to fetch user pulled models:', err);
-            return { success: false, data: [], count: 0 };
-          })
-        ]);
+        // Get current user from localStorage
+        const authProfile = localStorage.getItem("authProfile");
+        if (!authProfile) {
+          console.error('No auth profile found');
+          return;
+        }
         
-        if (availableResponse.success) {
-          // Create a Set of pulled model names for quick lookup
-          const pulledModelNames = new Set(
-            pulledResponse.success ? pulledResponse.data.map(model => model.name) : []
-          );
+        const profile = JSON.parse(authProfile);
+        const userId = profile?.user?.id;
+        
+        if (!userId) {
+          console.error('No user ID found in auth profile');
+          return;
+        }
+        
+        // Fetch categorized models for this user
+        const response = await getUserCategorizedModels(userId);
+        
+        if (response.success) {
+          // Set categorized models
+          const downloadedWithStatus = response.data.downloaded.map(model => ({ ...model, is_pulled: true }));
+          const availableToDownloadWithStatus = response.data.availableToDownload.map(model => ({ ...model, is_pulled: false }));
+          const availableGlobalWithStatus = response.data.availableGlobal.map(model => ({ ...model, is_pulled: false }));
           
-          // Mark models as pulled based on user's pulled models
-          const modelsWithPullStatus: ModelWithPullStatus[] = availableResponse.data.map(model => ({
+          setDownloadedModels(downloadedWithStatus);
+          setAvailableToDownloadModels(availableToDownloadWithStatus);
+          setAvailableGlobalModels(availableGlobalWithStatus);
+          
+          // Combine all models for compatibility
+          const allCategorizedModels = [
+            ...downloadedWithStatus,
+            ...availableToDownloadWithStatus,
+            ...availableGlobalWithStatus
+          ];
+          setAllModels(allCategorizedModels);
+          
+          // Set pulled models from downloaded category
+          const pulledModelsData = response.data.downloaded.map(model => ({
             ...model,
-            is_pulled: pulledModelNames.has(model.name)
+            pulled_at: new Date().toISOString(), // This should come from user settings in real data
+            usage_count: 0,
+            last_used: null,
+            is_pulled: true as const
           }));
           
-          setAllModels(modelsWithPullStatus);
+          setUserPulledModels(pulledModelsData);
           
-          if (pulledResponse.success) {
-            setUserPulledModels(pulledResponse.data);
-          }
+          console.log('Categorized models loaded:', {
+            downloaded: response.data.downloaded.length,
+            availableToDownload: response.data.availableToDownload.length,
+            availableGlobal: response.data.availableGlobal.length,
+            user: response.user
+          });
         }
       } catch (error) {
-        console.error('Failed to fetch models:', error);
+        console.error('Failed to fetch categorized models:', error);
       } finally {
         setLoading(false);
       }
@@ -326,9 +356,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     fetchModels();
   }, []);
 
-  // Separate pulled and unpulled models
-  const pulledModels = allModels.filter(model => model.is_pulled && model.is_active);
-  const unpulledModels = allModels.filter(model => !model.is_pulled && model.is_active);
+  // Use the categorized models from state
+  const pulledModels = downloadedModels;
 
   // Get currently selected model details for display
   const selectedModelDetails = allModels.find(model => model.name === selected) || 
@@ -541,13 +570,13 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             </>
           )}
 
-          {/* Available Models Section */}
-          {unpulledModels.length > 0 && (
+          {/* Available to Download Section */}
+          {availableToDownloadModels.length > 0 && (
             <>
               <div className="px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 Available to Download
               </div>
-              {unpulledModels.map((model) => (
+              {availableToDownloadModels.map((model) => (
                 <DropdownMenuItem
                   key={model._id}
                   onClick={() => handleModelClick(model)}
@@ -572,7 +601,38 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             </>
           )}
 
-          {/* Compare Mode Toggle */}
+          {/* Available Global Section */}
+          {availableGlobalModels.length > 0 && (
+            <>
+              <div className="px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Available (Global)
+              </div>
+              {availableGlobalModels.map((model) => (
+                <DropdownMenuItem
+                  key={model._id}
+                  onClick={() => handleModelClick(model)}
+                  className="flex items-center justify-between p-3 cursor-pointer opacity-60 hover:opacity-80"
+                >
+                  <div className="flex items-center gap-3">
+                    {getCategoryIcon(model.category)}
+                    <div>
+                      <p className="font-medium">{model.display_name}</p>
+                      <p className="text-xs text-muted-foreground">{model.size}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge className={`${getPerformanceTierColor(model.performance_tier)} text-xs opacity-75`}>
+                      {model.performance_tier}
+                    </Badge>
+                    <Download className="h-3 w-3 text-muted-foreground opacity-60" />
+                  </div>
+                </DropdownMenuItem>
+              ))}
+              <Separator className="my-2" />
+            </>
+          )}
+
+          {/* Compare Models Section */}
           <DropdownMenuItem
             onClick={onToggleCompare}
             className="flex items-center gap-2"

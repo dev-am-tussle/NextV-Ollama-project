@@ -24,40 +24,58 @@ export interface DownloadedModel extends ModelBase {
 }
 
 export interface AvailableToDownloadModel extends ModelBase {
-  purchased_at: string;
-  assigned_by_admin: string;
-  org_purchase_details: {
+  purchased_at?: string;
+  assigned_by_admin?: string;
+  org_purchase_details?: {
     cost: number;
     billing_cycle: string;
   };
 }
 
 export interface AvailableForPurchaseModel extends ModelBase {
-  pricing: {
-    monthly: number;
-    yearly: number;
-    one_time: number;
+  pricing?: {
+    monthly?: number;
+    yearly?: number;
+    one_time?: number;
   };
-  popular: boolean;
-  recommended: boolean;
+  popular?: boolean;
+  recommended?: boolean;
 }
 
 export interface CategorizedModelsResponse {
   success: boolean;
   data: {
     downloaded: DownloadedModel[];
-    available_to_download: AvailableToDownloadModel[];
-    available_for_purchase: AvailableForPurchaseModel[];
+    availableToDownload: AvailableToDownloadModel[];
+    availableGlobal: AvailableForPurchaseModel[];
   };
-  organization: {
-    name: string;
+  user: {
     id: string;
+    name: string;
+    email: string;
+    organization: {
+      id: string;
+      name: string;
+    } | null;
   };
 }
 
 // Get categorized models for org-user following the 3-section structure
 export async function getCategorizedModelsForUser(): Promise<CategorizedModelsResponse> {
-  return apiFetch("user/categorized-models");
+  // Get current user from localStorage
+  const authProfile = localStorage.getItem("authProfile");
+  if (!authProfile) {
+    throw new Error('No auth profile found');
+  }
+  
+  const profile = JSON.parse(authProfile);
+  const userId = profile?.user?.id;
+  
+  if (!userId) {
+    throw new Error('No user ID found in auth profile');
+  }
+  
+  return apiFetch(`available-models/user/${userId}/list`);
 }
 
 // Pull/download a model from "Available to Download" to "Downloaded"
@@ -127,7 +145,7 @@ export async function downloadModelWithProgress(
   const { onProgress, onError, onComplete } = callbacks;
   
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/user/download-model-stream`, {
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/user/download-model-stream`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

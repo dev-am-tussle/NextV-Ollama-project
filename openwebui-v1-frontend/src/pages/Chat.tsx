@@ -4,8 +4,8 @@ import { getCurrentUserType } from "@/services/unifiedAuth";
 import UserChat from "./UserChat";
 
 /**
- * Legacy Chat component - redirects to appropriate chat interface based on user type
- * This maintains backward compatibility while enabling separate user/admin experiences
+ * Legacy Chat component - redirects to user chat interface
+ * This maintains backward compatibility 
  */
 const Chat: React.FC = () => {
   const navigate = useNavigate();
@@ -14,19 +14,16 @@ const Chat: React.FC = () => {
     // Check user type from localStorage and redirect accordingly
     const userType = getCurrentUserType();
     
-    if (userType === 'admin') {
-      // Redirect admin users to admin chat interface
-      navigate('/admin/chat', { replace: true });
-    } else if (userType === 'user') {
+    if (userType === 'user') {
       // Redirect regular users to user chat interface
       navigate('/user/chat', { replace: true });
     } else {
-      // No user type detected, use default user chat
+      // Use default user chat for all users
       // This maintains backward compatibility
     }
   }, [navigate]);
 
-  // Fallback to UserChat if no redirect happens
+  // Fallback to UserChat
   return <UserChat />;
 };
 

@@ -1,4 +1,4 @@
-import { Building2, Users, Palette, MessageSquare, BarChart3, X, Layers, LogOut } from 'lucide-react';
+import { Building2, Users, Palette, BarChart3, X, Layers, LogOut } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
@@ -10,7 +10,7 @@ import React, { useState } from 'react';
 export interface OrgAdminLayoutProps {
   children: React.ReactNode;
   activeTab: string;
-  setActiveTab: (tab: 'dashboard' | 'users' | 'branding' | 'chat') => void;
+  setActiveTab: (tab: 'dashboard' | 'users' | 'branding') => void;
   orgSlug?: string;
 }
 
@@ -24,7 +24,6 @@ export const OrgAdminLayout = ({ children, activeTab, setActiveTab, orgSlug }: O
     { id: 'models', label: 'Models', icon: Layers },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'branding', label: 'Branding', icon: Palette },
-    { id: 'chat', label: 'Admin Chat', icon: MessageSquare },
     { id: 'setting', label: 'Settings', icon: Building2 },
   ];
 

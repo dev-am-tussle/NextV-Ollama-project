@@ -11,7 +11,7 @@ const AdminSettingsSchema = new mongoose.Schema(
       unique: true,
       index: true
     },
-    
+
     // Hierarchy and permissions
     permissions: {
       // User management permissions
@@ -19,52 +19,52 @@ const AdminSettingsSchema = new mongoose.Schema(
       can_remove_users: { type: Boolean, default: true },
       can_modify_user_roles: { type: Boolean, default: false },
       can_view_all_users: { type: Boolean, default: true },
-      
+
       // Model management permissions
       can_manage_models: { type: Boolean, default: false },
       can_assign_models: { type: Boolean, default: true },
       can_view_model_usage: { type: Boolean, default: true },
-      
+
       // Organization permissions
       can_modify_org_settings: { type: Boolean, default: false },
       can_view_org_analytics: { type: Boolean, default: true },
       can_manage_departments: { type: Boolean, default: true },
-      
+
       // Advanced permissions
       can_create_sub_admins: { type: Boolean, default: false },
       can_manage_invitations: { type: Boolean, default: true },
       can_export_data: { type: Boolean, default: false }
     },
-    
+
     // Hierarchy management
     hierarchy: {
       // Which departments this admin can manage
       managed_departments: [{ type: String }],
-      
+
       // Which users this admin can directly manage (by user IDs)
       managed_user_ids: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: "User"
       }],
-      
+
       // Reporting structure
       reports_to: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Admin",
         default: null
       },
-      
+
       // Sub-admins under this admin
       sub_admins: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: "Admin"
       }],
-      
+
       // Maximum number of users this admin can invite
       max_invitations: { type: Number, default: 50 },
       current_invitations_count: { type: Number, default: 0 }
     },
-    
+
     // Settings and preferences
     settings: {
       // Email notification preferences
@@ -74,26 +74,45 @@ const AdminSettingsSchema = new mongoose.Schema(
         monthly_analytics: { type: Boolean, default: true },
         system_alerts: { type: Boolean, default: true }
       },
-      
+
       // Dashboard preferences
       dashboard_preferences: {
-        default_view: { 
-          type: String, 
-          enum: ['users', 'analytics', 'models', 'invitations'], 
-          default: 'users' 
+        default_view: {
+          type: String,
+          enum: ['users', 'analytics', 'models', 'invitations'],
+          default: 'users'
         },
         show_quick_stats: { type: Boolean, default: true },
         auto_refresh_interval: { type: Number, default: 30000 } // milliseconds
       },
-      
+
       // Security settings
       security: {
         require_2fa: { type: Boolean, default: false },
         session_timeout: { type: Number, default: 3600 }, // seconds
         ip_restrictions: [{ type: String }] // Array of allowed IP ranges
-      }
+      },
+
+      // Admin's locally pulled/downloaded models
+      pulled_models: [{
+        model_id: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "AvailableModel",
+          required: true
+        },
+        pulled_at: { type: Date, default: Date.now },
+        usage_count: { type: Number, default: 0 },
+        last_used: { type: Date, default: null },
+        local_path: { type: String, default: null },
+        file_size: { type: Number, default: 0 },
+        download_status: {
+          type: String,
+          enum: ['downloading', 'completed', 'failed'],
+          default: 'completed'
+        }
+      }]
     },
-    
+
     // Activity tracking
     activity: {
       last_login: { type: Date, default: null },
@@ -102,14 +121,14 @@ const AdminSettingsSchema = new mongoose.Schema(
       total_invitations_sent: { type: Number, default: 0 },
       last_user_action: { type: Date, default: null }
     },
-    
+
     // Status
     is_active: {
       type: Boolean,
       default: true,
       index: true
     },
-    
+
     created_at: { type: Date, default: Date.now },
     updated_at: { type: Date, default: Date.now }
   },
@@ -129,7 +148,7 @@ AdminSettingsSchema.pre("save", function (next) {
 });
 
 // Static method to create default admin settings
-AdminSettingsSchema.statics.createDefault = function(adminId) {
+AdminSettingsSchema.statics.createDefault = function (adminId) {
   return this.create({
     admin_id: adminId,
     permissions: {
@@ -151,12 +170,12 @@ AdminSettingsSchema.statics.createDefault = function(adminId) {
 };
 
 // Instance method to check if admin can perform action
-AdminSettingsSchema.methods.canPerform = function(action) {
+AdminSettingsSchema.methods.canPerform = function (action) {
   return this.permissions[action] === true;
 };
 
 // Instance method to increment invitation count
-AdminSettingsSchema.methods.incrementInvitations = function() {
+AdminSettingsSchema.methods.incrementInvitations = function () {
   this.hierarchy.current_invitations_count += 1;
   this.activity.total_invitations_sent += 1;
   this.activity.last_invitation_sent = new Date();

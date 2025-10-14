@@ -19,4 +19,7 @@ router.put("/:id", adminModelsController.updateModel);
 // DELETE /api/admin/models/:id - Admin removes model
 router.delete("/:id", adminModelsController.deleteModel);
 
+// Admin fetches categorized model list for a given user
+router.get("/admin/:id/models-list", adminModelsController.getAdminModelsList);
+
 export default router;

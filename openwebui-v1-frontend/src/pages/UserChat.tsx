@@ -18,7 +18,7 @@ const UserChat: React.FC = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const chatService = createChatService('user');
+  const chatService = createChatService();
 
   const handleSignOut = async () => {
     try {
@@ -40,7 +40,6 @@ const UserChat: React.FC = () => {
 
   return (
     <BaseChatInterface
-      userType="user"
       chatService={chatService}
       user={user}
       isAuthenticated={isAuthenticated}

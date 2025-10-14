@@ -1,4 +1,7 @@
+import { Admin } from "../models/admin.model.js";
+import { AdminSettings } from "../models/adminSettings.model.js";
 import { AvailableModel } from "../models/availableModel.model.js";
+import { Organization } from "../models/organization.model.js";
 import { invalidateModelsCache } from "../services/ollama.service.js";
 import mongoose from "mongoose";
 
@@ -103,7 +106,7 @@ export async function createModel(req, res) {
     });
   } catch (error) {
     console.error("Error creating model:", error);
-    
+
     if (error.code === 11000) {
       return res.status(409).json({
         success: false,
@@ -142,7 +145,7 @@ export async function updateModel(req, res) {
         name: updateData.name,
         _id: { $ne: id }
       });
-      
+
       if (existingModel) {
         return res.status(409).json({
           success: false,
@@ -174,7 +177,7 @@ export async function updateModel(req, res) {
     });
   } catch (error) {
     console.error("Error updating model:", error);
-    
+
     if (error.code === 11000) {
       return res.status(409).json({
         success: false,
@@ -224,6 +227,89 @@ export async function deleteModel(req, res) {
     res.status(500).json({
       success: false,
       error: "Failed to delete model"
+    });
+  }
+}
+
+// GET /api/admin/models/admin/:id/models-list - Get categorized models for a specific admin
+export async function getAdminModelsList(req, res) {
+  try {
+    const { id: adminId } = req.params;
+
+    if (!adminId) {
+      return res.status(400).json({
+        success: false,
+        error: "Admin ID is required"
+      });
+    }
+
+    const admin = await Admin.findById(adminId);
+    if (!admin) {
+      return res.status(404).json({
+        success: false,
+        error: "Admin not found"
+      });
+    }
+
+    // Fetch admin settings for pulled models
+    const adminSettings = await AdminSettings.findOne({ admin_id: adminId });
+    const pulledModelIds = adminSettings?.settings?.pulled_models?.map(pm => pm.model_id.toString()) || [];
+
+    // Fetch Organization + allowed models
+    let orgAllowedModelIds = [];
+    let organization = null;
+    if (admin.organization_id) {
+      organization = await Organization.findById(admin.organization_id);
+      orgAllowedModelIds = organization?.settings?.allowed_models
+        ?.filter(am => am.enabled)
+        ?.map(am => am.model_id.toString()) || [];
+    }
+
+    // Fetch all available models
+    const allModels = await AvailableModel.find({ is_active: true })
+      .select('-created_at -updated_at')
+      .sort({ model_family: 1, parameters: 1 });
+
+    // Categorize models
+    const downloaded = [];
+    const availableToDownload = [];
+    const availableGlobal = [];
+
+    for (const model of allModels) {
+      const modelIdStr = model._id.toString();
+
+      if (pulledModelIds.includes(modelIdStr)) {
+        downloaded.push(model);
+      } else if (orgAllowedModelIds.includes(modelIdStr)) {
+        availableToDownload.push(model);
+      } else {
+        availableGlobal.push(model);
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        downloaded,
+        availableToDownload,
+        availableGlobal
+      },
+      admin: {
+        id: admin._id,
+        name: admin.name,
+        email: admin.email,
+        organization: organization ? {
+          id: organization._id,
+          name: organization.name
+        } : null
+      }
+    });
+
+  } catch (error) {
+    console.error("Error fetching admin models list:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Failed to fetch admin models list"
     });
   }
 }

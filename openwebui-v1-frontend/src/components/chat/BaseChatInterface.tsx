@@ -15,7 +15,7 @@ import { Composer } from "@/components/chat/Composer";
 import { useChatMessaging } from "@/hooks/useChatMessaging";
 import { ChatStatusBar } from "@/components/chat/ChatStatusBar";
 import ChatGeneratingOverlay from "@/components/chat/ChatGeneratingOverlay";
-import { ChatServiceInterface, UserType, getModelSuggestions } from "@/services/chatService";
+import { ChatServiceInterface, getModelSuggestions } from "@/services/chatService";
 
 export interface Message {
   id: string;
@@ -34,7 +34,6 @@ export interface ChatThread {
 }
 
 interface BaseChatInterfaceProps {
-  userType: UserType;
   chatService: ChatServiceInterface;
   user: any;
   isAuthenticated: boolean;
@@ -48,7 +47,6 @@ interface BaseChatInterfaceProps {
 }
 
 const BaseChatInterface: React.FC<BaseChatInterfaceProps> = ({
-  userType,
   chatService,
   user,
   isAuthenticated,
@@ -121,7 +119,7 @@ const BaseChatInterface: React.FC<BaseChatInterfaceProps> = ({
 
         // Restore last active thread for this user type
         try {
-          const storageKey = `lastActiveThreadId_${userType}`;
+          const storageKey = `lastActiveThreadId_user`;
           const justLoggedIn = localStorage.getItem("authJustLoggedIn");
           if (justLoggedIn) {
             localStorage.removeItem("authJustLoggedIn");
@@ -134,13 +132,13 @@ const BaseChatInterface: React.FC<BaseChatInterfaceProps> = ({
           }
         } catch (_) {}
       } catch (err) {
-        console.error(`Error loading ${userType} conversations:`, err);
+        console.error(`Error loading user conversations:`, err);
       }
     })();
     return () => {
       mounted = false;
     };
-  }, [loading, isAuthenticated, userType, chatService]);
+  }, [loading, isAuthenticated, chatService]);
 
   const activeThread = threads.find((t) => t.id === activeThreadId);
   const messages = activeThread?.messages || [];
@@ -164,7 +162,7 @@ const BaseChatInterface: React.FC<BaseChatInterfaceProps> = ({
     setThreads((prev) => [t, ...prev]);
     setActiveThreadId(t.id);
     try {
-      const storageKey = `lastActiveThreadId_${userType}`;
+      const storageKey = `lastActiveThreadId_user`;
       localStorage.setItem(storageKey, t.id);
     } catch (_) {}
   };
@@ -198,13 +196,13 @@ const BaseChatInterface: React.FC<BaseChatInterfaceProps> = ({
           )
         );
       } catch (err) {
-        console.error(`Error loading ${userType} messages:`, err);
+        console.error(`Error loading user messages:`, err);
       }
     })();
     return () => {
       mounted = false;
     };
-  }, [activeThreadId, chatService, userType]);
+  }, [activeThreadId, chatService]);
 
   const shareCurrentChat = async () => {
     await handleSend();
@@ -387,7 +385,7 @@ const BaseChatInterface: React.FC<BaseChatInterfaceProps> = ({
     }
   };
 
-  const modelInfo = getModelSuggestions(selectedModel, userType);
+  const modelInfo = getModelSuggestions(selectedModel);
   const filteredSuggestions = modelInfo.suggestions.filter(
     (s) => s.toLowerCase().includes(suggestionSearch.toLowerCase())
   );
@@ -440,7 +438,7 @@ const BaseChatInterface: React.FC<BaseChatInterfaceProps> = ({
           onSelect={(id: string) => {
             setActiveThreadId(id);
             try {
-              const storageKey = `lastActiveThreadId_${userType}`;
+              const storageKey = `lastActiveThreadId_user`;
               localStorage.setItem(storageKey, id);
             } catch (_) {}
           }}

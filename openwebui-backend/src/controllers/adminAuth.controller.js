@@ -86,6 +86,7 @@ export async function adminLogin(req, res) {
       organization: admin.organization_id ? {
         id: admin.organization_id._id,
         name: admin.organization_id.name,
+        slug: admin.organization_id.slug,
         status: admin.organization_id.status,
         subscription: admin.organization_id.subscription
       } : null,

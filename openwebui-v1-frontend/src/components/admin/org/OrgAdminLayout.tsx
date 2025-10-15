@@ -2,10 +2,10 @@ import { Building2, Users, Palette, BarChart3, X, Layers, LogOut } from 'lucide-
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
-import { getStoredAdminProfile, unifiedLogout } from '@/services/unifiedAuth';
+import { getAdminOrganization, adminLogout } from '@/services/adminAuth';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export interface OrgAdminLayoutProps {
   children: React.ReactNode;
@@ -16,8 +16,17 @@ export interface OrgAdminLayoutProps {
 
 export const OrgAdminLayout = ({ children, activeTab, setActiveTab, orgSlug }: OrgAdminLayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [organizationName, setOrganizationName] = useState<string>('Org Admin');
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Load organization name on mount
+  useEffect(() => {
+    const organization = getAdminOrganization();
+    if (organization?.name) {
+      setOrganizationName(organization.name);
+    }
+  }, []);
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
@@ -29,7 +38,7 @@ export const OrgAdminLayout = ({ children, activeTab, setActiveTab, orgSlug }: O
 
   const handleLogout = async () => {
     try {
-      await unifiedLogout();
+      await adminLogout();
       toast({
         title: "Logged out",
         description: "You have been successfully logged out.",
@@ -63,7 +72,7 @@ export const OrgAdminLayout = ({ children, activeTab, setActiveTab, orgSlug }: O
               className="h-6 w-6 text-primary cursor-pointer"
               onClick={handleBusinessIconClick}
             />
-            {sidebarOpen && <h1 className="text-lg font-semibold">Org Admin</h1>}
+            {sidebarOpen && <h1 className="text-lg font-semibold">{organizationName}</h1>}
           </div>
           {sidebarOpen && (
             <Button

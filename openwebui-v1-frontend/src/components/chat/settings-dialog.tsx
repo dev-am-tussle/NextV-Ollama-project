@@ -67,7 +67,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
           <Separator />
           
           {/* Admin Settings Section */}
-          <div className="space-y-3">
+          {/* <div className="space-y-3">
             <div>
               <p className="text-sm font-medium">Administration</p>
               <p className="text-xs text-muted-foreground">
@@ -83,7 +83,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
               <Shield className="mr-2 h-4 w-4" />
               Admin Settings
             </Button>
-          </div>
+          </div> */}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

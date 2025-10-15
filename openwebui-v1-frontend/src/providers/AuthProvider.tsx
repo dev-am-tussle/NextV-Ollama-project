@@ -39,6 +39,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const refreshUser = async () => {
     try {
+      // Avoid making API calls if admin is authenticated
+      const adminToken = localStorage.getItem("adminAuthToken");
+      const adminUserType = localStorage.getItem("adminUserType");
+      
+      if (adminToken && adminUserType === "admin") {
+        // Skip user refresh for admin sessions
+        setUser(null);
+        setSavedPrompts(null);
+        setLoading(false);
+        return;
+      }
+      
       // Prefer the login response persisted in localStorage to avoid extra API calls.
       const raw = localStorage.getItem("authProfile");
       if (raw) {
@@ -48,7 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         const settings = me?.settings || me?.user?.settings || null;
         setAvailableModels(settings?.avail_models || null);
 
-        // Load saved prompts from API if user exists
+        // Load saved prompts from API only for regular users
         if (me?.user?.id) {
           try {
             const savedPromptsFromAPI = await getUserSavedPrompts(me.user.id);
@@ -78,6 +90,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   useEffect(() => {
     const token = authService.getAuthToken();
+    
+    // Avoid making API calls if admin is authenticated
+    const adminToken = localStorage.getItem("adminAuthToken");
+    const adminUserType = localStorage.getItem("adminUserType");
+    
+    if (adminToken && adminUserType === "admin") {
+      // Skip user initialization for admin sessions
+      setLoading(false);
+      return;
+    }
+    
     if (token) {
       // if user lands on home '/', fetch root '/' which may include profile
       const locationPath = window.location.pathname;
@@ -95,7 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
               setUser(body.profile.user);
               setStats(body.profile.stats || null);
 
-              // Load saved prompts for authenticated user
+              // Load saved prompts only for regular users, not admins
               if (body.profile.user?.id) {
                 try {
                   const savedPromptsFromAPI = await getUserSavedPrompts(
@@ -127,6 +150,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const login = async (payload: { email: string; password: string }) => {
     const res = await authService.login(payload);
     console.log("[AuthProvider] login response:", res);
+    
     // After login, prefer the persisted authProfile for user/settings. This
     // avoids races where protected routes navigate before user state is set.
     try {
@@ -138,7 +162,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       const settings = me?.settings || me?.user?.settings || null;
       setAvailableModels(settings?.avail_models || null);
 
-      // Load saved prompts from API after login
+      // Load saved prompts from API only for regular users
       if (me?.user?.id) {
         try {
           const savedPromptsFromAPI = await getUserSavedPrompts(me.user.id);
@@ -188,6 +212,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const refreshSavedPrompts = async () => {
     if (!user?.id) return;
+    
+    // Avoid making API calls if admin is authenticated
+    const adminToken = localStorage.getItem("adminAuthToken");
+    const adminUserType = localStorage.getItem("adminUserType");
+    
+    if (adminToken && adminUserType === "admin") return;
+    
     try {
       const prompts = await getUserSavedPrompts(user.id);
       setSavedPrompts(prompts);

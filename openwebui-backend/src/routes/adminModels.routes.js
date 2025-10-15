@@ -22,4 +22,10 @@ router.delete("/:id", adminModelsController.deleteModel);
 // Admin fetches categorized model list for a given user
 router.get("/admin/:id/models-list", adminModelsController.getAdminModelsList);
 
+// Organization-scoped model management routes
+router.get("/organization", adminModelsController.getOrganizationModels);
+router.put("/organization/:modelId/toggle", adminModelsController.toggleOrganizationModel);
+router.delete("/organization/:modelId", adminModelsController.deleteOrganizationModel);
+router.get("/organization/analytics", adminModelsController.getOrganizationModelAnalytics);
+
 export default router;

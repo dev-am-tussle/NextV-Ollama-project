@@ -1,5 +1,54 @@
 // Organization Management Service
-import { adminApiFetch } from "./adminAuth";
+import { isSuperAdmin } from "./adminAuth";
+
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3000';
+
+// Smart API fetch that detects SuperAdmin vs Admin context
+const smartApiFetch = async (endpoint: string, options: RequestInit = {}) => {
+  // Check if user is SuperAdmin first
+  const superAdminToken = localStorage.getItem('superAdminToken');
+  const adminToken = localStorage.getItem('adminAuthToken');
+  
+  let token: string | null = null;
+  
+  if (superAdminToken && isSuperAdmin()) {
+    token = superAdminToken;
+  } else if (adminToken) {
+    token = adminToken;
+  }
+  
+  if (!token) {
+    throw new Error('No authentication token found');
+  }
+
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    ...options,
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+  if (response.status === 401) {
+    // Token expired or invalid - clear appropriate auth
+    if (superAdminToken && isSuperAdmin()) {
+      localStorage.removeItem('superAdminToken');
+      localStorage.removeItem('isSuperAdmin');
+    } else {
+      localStorage.removeItem('adminAuthToken');
+      localStorage.removeItem('adminAuthProfile');
+    }
+    throw new Error('Authentication failed');
+  }
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+};
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -160,12 +209,12 @@ export interface CreateOrganizationData {
 
 // Organization Management API calls
 export const fetchOrganizations = async (page = 1, limit = 10) => {
-  return adminApiFetch(`/api/super-admin/organizations?page=${page}&limit=${limit}`);
+  return smartApiFetch(`/api/super-admin/organizations?page=${page}&limit=${limit}`);
 };
 
 export const fetchOrganizationBySlug = async (slug: string): Promise<{ success: boolean; data: OrganizationWithStats }> => {
   // First get all organizations and find by slug
-  const orgsResponse = await adminApiFetch('/api/super-admin/organizations?limit=100');
+  const orgsResponse = await smartApiFetch('/api/super-admin/organizations?limit=100');
   if (orgsResponse.success && orgsResponse.data) {
     const org = orgsResponse.data.find((o: any) => o.slug === slug);
     if (org) {
@@ -176,44 +225,44 @@ export const fetchOrganizationBySlug = async (slug: string): Promise<{ success: 
 };
 
 export const fetchOrganizationById = async (id: string): Promise<{ success: boolean; data: OrganizationDetails }> => {
-  return adminApiFetch(`/api/super-admin/organizations/${id}`);
+  return smartApiFetch(`/api/super-admin/organizations/${id}`);
 };
 
 export const createOrganization = async (data: CreateOrganizationData) => {
-  return adminApiFetch('/api/super-admin/organizations', {
+  return smartApiFetch('/api/super-admin/organizations', {
     method: 'POST',
     body: JSON.stringify(data),
   });
 };
 
-export const updateOrganization = async (id: string, updates: Partial<OrganizationWithStats>) => {
-  return adminApiFetch(`/api/super-admin/organizations/${id}`, {
+export const updateOrganization = async (id: string, data: Partial<CreateOrganizationData>) => {
+  return smartApiFetch(`/api/super-admin/organizations/${id}`, {
     method: 'PUT',
-    body: JSON.stringify(updates),
+    body: JSON.stringify(data),
   });
 };
 
 export const deleteOrganization = async (id: string) => {
-  return adminApiFetch(`/api/super-admin/organizations/${id}`, {
+  return smartApiFetch(`/api/super-admin/organizations/${id}`, {
     method: 'DELETE',
   });
 };
 
 export const assignModelsToOrganization = async (organizationId: string, modelIds: string[]) => {
-  return adminApiFetch(`/api/super-admin/organizations/${organizationId}/models`, {
+  return smartApiFetch(`/api/super-admin/organizations/${organizationId}/models`, {
     method: 'POST',
     body: JSON.stringify({ model_ids: modelIds }),
   });
 };
 
 export const fetchOrganizationEmployees = async (organizationId: string, page = 1, limit = 10) => {
-  return adminApiFetch(`/api/super-admin/organizations/${organizationId}/employees?page=${page}&limit=${limit}`);
+  return smartApiFetch(`/api/super-admin/organizations/${organizationId}/employees?page=${page}&limit=${limit}`);
 };
 
 export const fetchEmployeesByOrgSlug = async (orgSlug: string, page = 1, limit = 50) => {
   try {
     // For org admins, use the admin users endpoint which filters by their organization
-    const response = await adminApiFetch(`/api/admin/users?page=${page}&limit=${limit}`);
+    const response = await smartApiFetch(`/api/admin/users?page=${page}&limit=${limit}`);
     
     if (response.success && response.data) {
       // Transform the response to match the expected format
@@ -246,16 +295,16 @@ export const fetchEmployeesByOrgSlug = async (orgSlug: string, page = 1, limit =
 // Model Management Functions
 export const fetchAvailableModels = async () => {
   console.log('📞 Calling API: /api/super-admin/organizations/available-models');
-  return adminApiFetch('/api/super-admin/organizations/available-models');
+  return smartApiFetch('/api/super-admin/organizations/available-models');
 };
 
 export const fetchOrganizationModels = async (organizationId: string) => {
-  return adminApiFetch(`/api/super-admin/organizations/${organizationId}/models`);
+  return smartApiFetch(`/api/super-admin/organizations/${organizationId}/models`);
 };
 
 // Admin Management Functions
 export const fetchOrganizationAdmins = async (organizationId: string, page = 1, limit = 10) => {
-  return adminApiFetch(`/api/super-admin/organizations/${organizationId}/admins?page=${page}&limit=${limit}`);
+  return smartApiFetch(`/api/super-admin/organizations/${organizationId}/admins?page=${page}&limit=${limit}`);
 };
 
 export const createOrganizationAdmin = async (organizationId: string, adminData: {
@@ -264,28 +313,28 @@ export const createOrganizationAdmin = async (organizationId: string, adminData:
   password: string;
   permissions?: any;
 }) => {
-  return adminApiFetch(`/api/super-admin/organizations/${organizationId}/admins`, {
+  return smartApiFetch(`/api/super-admin/organizations/${organizationId}/admins`, {
     method: 'POST',
     body: JSON.stringify(adminData),
   });
 };
 
 export const updateAdmin = async (adminId: string, updateData: any) => {
-  return adminApiFetch(`/api/super-admin/organizations/admins/${adminId}`, {
+  return smartApiFetch(`/api/super-admin/organizations/admins/${adminId}`, {
     method: 'PUT',
     body: JSON.stringify(updateData),
   });
 };
 
 export const resetAdminPassword = async (adminId: string, newPassword: string) => {
-  return adminApiFetch(`/api/super-admin/organizations/admins/${adminId}/password`, {
+  return smartApiFetch(`/api/super-admin/organizations/admins/${adminId}/password`, {
     method: 'PUT',
     body: JSON.stringify({ new_password: newPassword }),
   });
 };
 
 export const deleteAdmin = async (adminId: string) => {
-  return adminApiFetch(`/api/super-admin/organizations/admins/${adminId}`, {
+  return smartApiFetch(`/api/super-admin/organizations/admins/${adminId}`, {
     method: 'DELETE',
   });
 };
@@ -364,7 +413,7 @@ export const createEmployee = async (
       }
     };
 
-    const response = await adminApiFetch('/api/admin/users', {
+    const response = await smartApiFetch('/api/admin/users', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -402,7 +451,7 @@ export const createBulkEmployees = async (
       organization_id: organizationId
     };
 
-    const response = await adminApiFetch('/api/admin/users/bulk', {
+    const response = await smartApiFetch('/api/admin/users/bulk', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -15,7 +15,7 @@ import { useAuth } from "@/providers/AuthProvider";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, User, Shield } from "lucide-react";
-import { unifiedLogin } from "@/services/unifiedAuth";
+import { adminLogin } from "@/services/adminAuth";
 
 const MicrosoftLogo = ({ className = "h-4 w-4" }: { className?: string }) => (
   <svg
@@ -56,24 +56,22 @@ const Login = () => {
     setIsLoading(true);
     try {
       if (userType === 'admin') {
-        // Use unified login for admin
-        const response = await unifiedLogin(email, password, 'admin');
+        // Use separate admin login system
+        const response = await adminLogin(email, password);
         
-        if (response.success) {
-          toast({
-            title: "Welcome back, Admin!",
-            description: "You have been successfully logged in.",
-          });
-          
-          // Get organization slug for redirect
-          const orgSlug = response.data.organization?.slug;
-          const redirectPath = orgSlug ? `/${orgSlug}/org-admin` : '/';
-          
-          // Small delay to ensure localStorage is set, then navigate
-          setTimeout(() => {
-            navigate(redirectPath);
-          }, 100);
-        }
+        toast({
+          title: "Welcome back, Admin!",
+          description: "You have been successfully logged in.",
+        });
+        
+        // Get organization slug for redirect
+        const orgSlug = response.organization?.slug;
+        const redirectPath = orgSlug ? `/${orgSlug}/org-admin` : '/';
+        
+        // Small delay to ensure localStorage is set, then navigate
+        setTimeout(() => {
+          navigate(redirectPath);
+        }, 100);
       } else {
         // Use existing user login
         await login({ email, password });

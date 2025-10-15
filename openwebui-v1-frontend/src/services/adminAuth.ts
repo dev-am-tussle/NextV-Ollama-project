@@ -79,13 +79,15 @@ export interface AdminLoginResponse {
   token: string;
 }
 
-// Storage keys
-const ADMIN_TOKEN_KEY = 'superAdminToken'; // Match SuperAdminLogin storage key
-const ADMIN_PROFILE_KEY = 'userProfile'; // Match SuperAdminLogin storage key
+// Storage keys - completely separate from user auth
+const ADMIN_TOKEN_KEY = 'adminAuthToken';
+const ADMIN_PROFILE_KEY = 'adminAuthProfile';
+const ADMIN_USER_TYPE_KEY = 'adminUserType';
+const ADMIN_ORGANIZATION_KEY = 'adminOrganization';
 
 // Admin authentication functions
 export const adminLogin = async (email: string, password: string): Promise<AdminLoginResponse> => {
-  const response = await fetch(`${API_BASE}/admin/auth/login`, {
+  const response = await fetch(`${API_BASE}/api/admin/auth/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -101,9 +103,15 @@ export const adminLogin = async (email: string, password: string): Promise<Admin
   const result = await response.json();
   
   if (result.success) {
-    // Store token and profile
+    // Store admin-specific authentication data completely separate from user auth
     localStorage.setItem(ADMIN_TOKEN_KEY, result.data.token);
     localStorage.setItem(ADMIN_PROFILE_KEY, JSON.stringify(result.data));
+    localStorage.setItem(ADMIN_USER_TYPE_KEY, 'admin');
+    
+    if (result.data.organization) {
+      localStorage.setItem(ADMIN_ORGANIZATION_KEY, JSON.stringify(result.data.organization));
+    }
+    
     return result.data;
   } else {
     throw new Error(result.error || 'Login failed');
@@ -115,7 +123,7 @@ export const adminLogout = async (): Promise<void> => {
   
   if (token) {
     try {
-      await fetch(`${API_BASE}/admin/auth/logout`, {
+      await fetch(`${API_BASE}/api/admin/auth/logout`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -127,22 +135,15 @@ export const adminLogout = async (): Promise<void> => {
     }
   }
   
-  // Clear local storage
+  // Clear only admin-specific storage - don't touch user auth
   localStorage.removeItem(ADMIN_TOKEN_KEY);
   localStorage.removeItem(ADMIN_PROFILE_KEY);
+  localStorage.removeItem(ADMIN_USER_TYPE_KEY);
+  localStorage.removeItem(ADMIN_ORGANIZATION_KEY);
 };
 
 export const getAdminToken = (): string | null => {
-  // First check the unified auth token
-  const unifiedToken = localStorage.getItem('authToken');
-  const userType = localStorage.getItem('userType');
-  
-  // If user is authenticated as admin via unified auth, use that token
-  if (unifiedToken && userType === 'admin') {
-    return unifiedToken;
-  }
-  
-  // Fallback to legacy admin token
+  // Use admin-specific token only
   return localStorage.getItem(ADMIN_TOKEN_KEY);
 };
 
@@ -151,18 +152,16 @@ export const getAdminProfile = (): AdminLoginResponse | null => {
   return profile ? JSON.parse(profile) : null;
 };
 
+export const getAdminOrganization = (): Organization | null => {
+  const organization = localStorage.getItem(ADMIN_ORGANIZATION_KEY);
+  return organization ? JSON.parse(organization) : null;
+};
+
 export const isAdminAuthenticated = (): boolean => {
   const token = getAdminToken();
-  
-  // Check unified auth
-  const userType = localStorage.getItem('userType');
-  if (token && userType === 'admin') {
-    return true;
-  }
-  
-  // Check legacy admin auth
+  const userType = localStorage.getItem(ADMIN_USER_TYPE_KEY);
   const profile = getAdminProfile();
-  return !!(token && profile);
+  return !!(token && userType === 'admin' && profile);
 };
 
 export const isSuperAdmin = (): boolean => {
@@ -198,12 +197,11 @@ export const adminApiFetch = async (endpoint: string, options: RequestInit = {})
   });
 
   if (response.status === 401) {
-    // Token expired or invalid - clear both auth systems
+    // Token expired or invalid - clear only admin auth
     localStorage.removeItem(ADMIN_TOKEN_KEY);
     localStorage.removeItem(ADMIN_PROFILE_KEY);
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('userType');
-    localStorage.removeItem('adminProfile');
+    localStorage.removeItem(ADMIN_USER_TYPE_KEY);
+    localStorage.removeItem(ADMIN_ORGANIZATION_KEY);
     window.location.href = '/auth/login';
     throw new Error('Admin session expired');
   }
@@ -218,11 +216,11 @@ export const adminApiFetch = async (endpoint: string, options: RequestInit = {})
 
 // Admin profile management
 export const fetchAdminProfile = async (): Promise<AdminLoginResponse> => {
-  return adminApiFetch('/admin/auth/profile');
+  return adminApiFetch('/api/admin/auth/profile');
 };
 
 export const updateAdminProfile = async (updates: Partial<AdminUser>): Promise<AdminUser> => {
-  const result = await adminApiFetch('/admin/auth/profile', {
+  const result = await adminApiFetch('/api/admin/auth/profile', {
     method: 'PUT',
     body: JSON.stringify(updates),
   });
@@ -238,7 +236,7 @@ export const updateAdminProfile = async (updates: Partial<AdminUser>): Promise<A
 };
 
 export const changeAdminPassword = async (currentPassword: string, newPassword: string): Promise<void> => {
-  await adminApiFetch('/admin/auth/password', {
+  await adminApiFetch('/api/admin/auth/password', {
     method: 'PUT',
     body: JSON.stringify({ currentPassword, newPassword }),
   });
@@ -246,5 +244,5 @@ export const changeAdminPassword = async (currentPassword: string, newPassword: 
 
 // Dashboard stats
 export const fetchAdminDashboardStats = async () => {
-  return adminApiFetch('/admin/auth/dashboard/stats');
+  return adminApiFetch('/api/admin/auth/dashboard/stats');
 };

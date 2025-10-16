@@ -109,13 +109,13 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
           theme: "dark",
           default_model: "gemma:2b",
           can_save_prompts: true,
-          can_upload_files: true,
+          can_upload_files: false,
         },
         features: {
           analytics_enabled: true,
-          file_sharing_enabled: true,
+          file_sharing_enabled: false,
           custom_prompts_enabled: true,
-          api_access_enabled: false,
+          api_access_enabled: true,
         },
       },
     };
@@ -290,13 +290,13 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
           theme: "dark",
           default_model: "gemma:2b",
           can_save_prompts: true,
-          can_upload_files: true
+          can_upload_files: false
         },
         features: {
           analytics_enabled: true,
-          file_sharing_enabled: true,
+          file_sharing_enabled: false,
           custom_prompts_enabled: true,
-          api_access_enabled: false
+          api_access_enabled: true
         }
       }
     });
@@ -437,22 +437,22 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create New Organization</DialogTitle>
+          <DialogTitle>Create New Department</DialogTitle>
           <DialogDescription>
-            Add a new organization to the platform with an admin account and custom settings.
+            Add a new department to the platform with an admin account and custom settings.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Organization Information */}
           <div className="space-y-4">
-            <h3 className="text-lg font-medium">Organization Information</h3>
+            <h3 className="text-lg font-medium">Department Information</h3>
 
             <div className="space-y-2">
-              <Label htmlFor="name">Organization Name *</Label>
+              <Label htmlFor="name">Department Name *</Label>
               <Input
                 id="name"
-                placeholder="Enter organization name"
+                placeholder="Enter department name"
                 value={formData.name}
                 onChange={(e) => {
                   const newName = e.target.value;
@@ -470,7 +470,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
               <Label htmlFor="slug">URL Slug *</Label>
               <Input
                 id="slug"
-                placeholder="organization-url-slug"
+                placeholder="department-url-slug"
                 value={formData.slug}
                 onChange={(e) => {
                   const slug = e.target.value
@@ -504,7 +504,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
               <Label htmlFor="description">Description</Label>
               <Textarea
                 id="description"
-                placeholder="Describe the organization (optional)"
+                placeholder="Describe the department (optional)"
                 value={formData.description}
                 onChange={(e) => handleInputChange('description', e.target.value)}
                 rows={3}
@@ -524,7 +524,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
                 {modelsLoading ? 'Refreshing...' : 'Refresh'}
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">Select which models this organization can access. These appear as allowed models in org settings.</p>
+            <p className="text-xs text-muted-foreground">Select which models this department can access. These appear as allowed models in org settings.</p>
 
             {modelsLoading ? (
               <CircleLoader label="Loading models" />
@@ -692,7 +692,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
                       <Input
                         id={`admin_email_${index}`}
                         type="email"
-                        placeholder="admin@organization.com"
+                        placeholder="admin@department.com"
                         value={admin.email}
                         onChange={(e) => updateAdmin(index, 'email', e.target.value)}
                         required
@@ -749,7 +749,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
 
           {/* Organization Limits */}
           <div className="space-y-4">
-            <h3 className="text-lg font-medium">Organization Limits</h3>
+            <h3 className="text-lg font-medium">Department Limits</h3>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -870,7 +870,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
 
           {/* Features */}
           <div className="space-y-4">
-            <h3 className="text-lg font-medium">Organization Features</h3>
+            <h3 className="text-lg font-medium">Department Features</h3>
 
             <div className="grid grid-cols-1 gap-4">
               <div className="flex items-center justify-between">
@@ -926,7 +926,7 @@ const AddOrganizationDialog: React.FC<AddOrganizationDialogProps> = ({
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={loading}>
-            {loading ? (mode === 'edit' ? 'Saving...' : 'Creating...') : (mode === 'edit' ? 'Save Changes' : 'Create Organization')}
+            {loading ? (mode === 'edit' ? 'Saving...' : 'Creating...') : (mode === 'edit' ? 'Save Changes' : 'Create Department')}
           </Button>
         </DialogFooter>
       </DialogContent>

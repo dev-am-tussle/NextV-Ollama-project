@@ -123,7 +123,7 @@ export const UserManagement = ({ orgSlug }: UserManagementProps) => {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Organization Users</CardTitle>
+            <CardTitle>Department Users</CardTitle>
             <div className="flex items-center gap-2">
               <Button 
                 variant="outline" 

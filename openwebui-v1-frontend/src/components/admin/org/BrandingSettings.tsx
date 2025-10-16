@@ -16,7 +16,7 @@ interface BrandingSettingsProps {
  */
 export const BrandingSettings = ({ orgSlug }: BrandingSettingsProps) => {
   const [settings, setSettings] = useState({
-    siteTitle: 'My Organization',
+    siteTitle: 'My Department',
     logoText: 'OrgChat',
     primaryColor: '#8B5CF6',
     buttonColor: '#8B5CF6',
@@ -38,7 +38,7 @@ export const BrandingSettings = ({ orgSlug }: BrandingSettingsProps) => {
         <CardHeader>
           <CardTitle>Brand Identity</CardTitle>
           <CardDescription>
-            Customize your organization\'s branding and appearance
+            Customize your department's branding and appearance
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">

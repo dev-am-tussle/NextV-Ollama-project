@@ -32,9 +32,11 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
 }) => {
   const navigate = useNavigate();
 
-  const handleAdminSettings = () => {
+  const handleApiConfig = () => {
     onOpenChange(false); // Close settings dialog
-    navigate("/admin"); // Navigate to admin settings
+    const currentPath = window.location.pathname;
+    const orgSlug = currentPath.split('/')[1];
+    navigate(`/${orgSlug}/api-config`); // Navigate to API configuration page
   };
 
   return (
@@ -63,9 +65,39 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
             </div>
             <Switch checked={compareMode} onCheckedChange={onToggleCompare} />
           </div>
-          
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">External API Integration</p>
+                <p className="text-xs text-muted-foreground">
+                  Configure external AI model APIs
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleApiConfig}
+                className="flex items-center gap-2 hover:bg-accent"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-4 w-4"
+                >
+                  <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
+                  <path d="M3 12v5h16a2 2 0 0 1 0 4H3v-4" />
+                </svg>
+                Configure APIs
+              </Button>
+            </div>
+          </div>
           <Separator />
-          
+
           {/* Admin Settings Section */}
           {/* <div className="space-y-3">
             <div>

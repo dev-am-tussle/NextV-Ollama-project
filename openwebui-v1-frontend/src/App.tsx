@@ -18,6 +18,7 @@ import SuperAdmin from "./pages/supadmin/SuperAdmin";
 import { initializeBrandingSettings } from "@/services/adminSettings";
 import { CircleLoader } from "@/components/ui/loader";
 import OrgAdmin from "./pages/admin/OrgAdmin";
+import ApiConfigPage from "./pages/api-config";
 
 // Lazy load SuperAdminLogin
 const SuperAdminLogin = lazy(() => import("./pages/supadmin/SuperAdminLogin"));
@@ -80,6 +81,16 @@ const AppContent = () => {
             element={
               <ProtectedRoute>
                 <OrgAdmin />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* API Configuration Route */}
+          <Route
+            path="/:slug/api-config"
+            element={
+              <ProtectedRoute>
+                <ApiConfigPage />
               </ProtectedRoute>
             }
           />

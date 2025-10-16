@@ -128,7 +128,7 @@ export const OrgAdminLayout = ({ children, activeTab, setActiveTab, orgSlug }: O
         <header className="flex h-16 items-center justify-between border-b border-border px-6">
           <div>
             <h2 className="text-xl font-semibold capitalize">{activeTab}</h2>
-            <p className="text-sm text-muted-foreground">Manage your organization</p>
+            <p className="text-sm text-muted-foreground">Manage your Department</p>
           </div>
           <ThemeToggle />
         </header>

@@ -147,7 +147,7 @@ export const AdminModelsPage = () => {
         onSuccess: () => {
             toast({
                 title: "Success",
-                description: "Model permanently removed from your organization",
+                description: "Model permanently removed from your department",
             });
             queryClient.invalidateQueries({ queryKey: ["admin-organization-models"] });
             queryClient.invalidateQueries({ queryKey: ["admin-organization-analytics"] });
@@ -183,7 +183,7 @@ export const AdminModelsPage = () => {
 
     const handleDeleteModel = (modelId: string) => {
         // Show confirmation dialog
-        if (window.confirm('Are you sure you want to permanently remove this model from your organization? This action cannot be undone.')) {
+        if (window.confirm('Are you sure you want to permanently remove this model from your department? This action cannot be undone.')) {
             deleteModelMutation.mutate(modelId);
         }
     };
@@ -220,7 +220,7 @@ export const AdminModelsPage = () => {
                         Failed to load models
                     </h3>
                     <p className="text-muted-foreground mb-4">
-                        There was an error loading your organization's models.
+                        There was an error loading your department's models.
                     </p>
                     <button
                         onClick={() => refetch()}
@@ -240,7 +240,7 @@ export const AdminModelsPage = () => {
                 <div>
                     <h1 className="text-3xl font-bold text-foreground">Model Management</h1>
                     <p className="text-muted-foreground mt-1">
-                        Manage your organization's AI models and monitor usage analytics
+                        Manage your department's AI models and monitor usage analytics
                     </p>
                 </div>
                 <button

@@ -67,7 +67,7 @@ export const AdminKPICards = ({ models, analytics, detailedAnalytics }: AdminKPI
             icon: Database,
             gradient: "from-blue-500/10 to-blue-600/5",
             iconColor: "text-blue-600 dark:text-blue-400",
-            description: "Models in your org"
+            description: "Models in your department"
         },
         {
             title: "Total Users",
@@ -75,7 +75,7 @@ export const AdminKPICards = ({ models, analytics, detailedAnalytics }: AdminKPI
             icon: Users,
             gradient: "from-emerald-500/10 to-emerald-600/5",
             iconColor: "text-emerald-600 dark:text-emerald-400",
-            description: "Organization members"
+            description: "Department members"
         },
         {
             title: "Model Pulls",

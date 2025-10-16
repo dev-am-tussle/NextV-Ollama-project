@@ -9,8 +9,8 @@ const SuperAdmin = () => {
     <AdminLayout>
       <Routes>
         <Route path="/" element={<ModelCatalog />} />
-        <Route path="/organizations" element={<OrganizationManagement />} />
-        <Route path="/organization/:id" element={<OrganizationDetails />} />
+        <Route path="/departments" element={<OrganizationManagement />} />
+        <Route path="/department/:id" element={<OrganizationDetails />} />
         {/* Add more routes as needed */}
         <Route path="/conversations" element={<div>Conversations Management Coming Soon...</div>} />
         <Route path="/settings" element={<div>Settings Coming Soon...</div>} />

@@ -7,7 +7,8 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   { name: "Models", href: "/superadmin", icon: Package },
-  { name: "Organizations", href: "/superadmin/organizations", icon: Building2 },
+  // { name: "Organizations", href: "/superadmin/organizations", icon: Building2 },
+  { name: "Departments", href: "/superadmin/departments", icon: Building2 },
   { name: "Conversations", href: "/superadmin/conversations", icon: MessageSquare },
   { name: "Settings", href: "/superadmin/settings", icon: Settings },
   { name: "Logs", href: "/superadmin/logs", icon: FileText },

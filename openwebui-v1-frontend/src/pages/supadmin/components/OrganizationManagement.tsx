@@ -143,8 +143,8 @@ export const OrganizationManagement = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Organization Management</h1>
-          <p className="text-muted-foreground mt-1">Manage all organizations and their settings</p>
+          <h1 className="text-3xl font-bold text-foreground">Department Management</h1>
+          <p className="text-muted-foreground mt-1">Manage all Departments and their settings</p>
         </div>
         <div className="flex items-center gap-2">
           <Button onClick={loadOrganizations} variant="outline" disabled={isLoading}>
@@ -153,7 +153,7 @@ export const OrganizationManagement = () => {
           </Button>
           <Button onClick={() => setShowAddOrgDialog(true)}>
             <Plus className="mr-2 h-4 w-4" />
-            Add Organization
+            Add Department
           </Button>
         </div>
       </div>
@@ -164,13 +164,13 @@ export const OrganizationManagement = () => {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
               <Building2 className="h-4 w-4" />
-              Total Organizations
+              Total Departments
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">{stats.totalOrgs}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              {stats.activeOrgs} active organizations
+              {stats.activeOrgs} active Departments
             </p>
           </CardContent>
         </Card>
@@ -179,13 +179,13 @@ export const OrganizationManagement = () => {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
               <Crown className="h-4 w-4" />
-              Organization Admins
+              Department Admins
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">{stats.totalAdmins}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              Across all organizations
+              Across all Departments
             </p>
           </CardContent>
         </Card>
@@ -221,19 +221,19 @@ export const OrganizationManagement = () => {
         </Card>
       </div>
 
-      {/* Search and Organizations List */}
+      {/* Search and Departments List */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5" />
-              Organizations ({organizations.length})
+              Departments ({organizations.length})
             </CardTitle>
             <div className="flex items-center gap-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
-                  placeholder="Search organizations..."
+                  placeholder="Search Departments..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10 w-64"
@@ -246,17 +246,17 @@ export const OrganizationManagement = () => {
           {isLoading ? (
             <div className="text-center py-8">
               <RefreshCw className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
-              <p className="text-muted-foreground mt-2">Loading organizations...</p>
+              <p className="text-muted-foreground mt-2">Loading Departments...</p>
             </div>
           ) : filteredOrganizations.length === 0 ? (
             <div className="text-center py-8">
               <Building2 className="mx-auto h-8 w-8 text-muted-foreground" />
-              <p className="text-muted-foreground mt-2">No organizations found</p>
+              <p className="text-muted-foreground mt-2">No Departments found</p>
               <Button 
                 className="mt-4"
                 onClick={() => setShowAddOrgDialog(true)}
               >
-                Create First Organization
+                Create First Department
               </Button>
             </div>
           ) : (
@@ -315,7 +315,7 @@ export const OrganizationManagement = () => {
                           <Button 
                             variant="outline" 
                             size="sm"
-                            onClick={() => navigate(`/superadmin/organization/${org._id}`)}
+                            onClick={() => navigate(`/superadmin/department/${org._id}`)}
                           >
                             <Eye className="h-4 w-4 mr-1" />
                             View
@@ -346,10 +346,10 @@ export const OrganizationManagement = () => {
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Organization</AlertDialogTitle>
+                              <AlertDialogTitle>Delete Department</AlertDialogTitle>
                               <AlertDialogDescription>
                                 Are you sure you want to delete "{org.name}"? 
-                                This will permanently delete the organization and all its data including 
+                                This will permanently delete the Department and all its data including 
                                 admins, employees, and settings. This action cannot be undone.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
@@ -359,7 +359,7 @@ export const OrganizationManagement = () => {
                                 onClick={() => handleDeleteOrganization(org._id)}
                                 className="bg-red-600 hover:bg-red-700"
                               >
-                                Delete Organization
+                                Delete Department
                               </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>

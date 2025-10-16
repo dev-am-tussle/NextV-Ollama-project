@@ -248,10 +248,10 @@ export const OrganizationDetails = () => {
       <div className="p-6">
         <div className="text-center py-12">
           <Building2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <h2 className="text-lg font-medium mb-2">Organization not found</h2>
-          <Button onClick={() => navigate('/superadmin/organizations')}>
+          <h2 className="text-lg font-medium mb-2">Departments not found</h2>
+          <Button onClick={() => navigate('/superadmin/departments')}>
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Organizations
+            Back to Departments
           </Button>
         </div>
       </div>
@@ -268,7 +268,7 @@ export const OrganizationDetails = () => {
           <Button 
             variant="outline" 
             size="sm"
-            onClick={() => navigate('/superadmin/organizations')}
+            onClick={() => navigate('/superadmin/departments')}
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back
@@ -281,7 +281,7 @@ export const OrganizationDetails = () => {
         <div className="flex items-center gap-2">
           <Button onClick={() => setEditDialogOpen(true)} size="sm" variant="outline">
             <Edit className="mr-2 h-4 w-4" />
-            Edit Organization
+            Edit Department
           </Button>
           <Dialog open={modelManagementOpen} onOpenChange={setModelManagementOpen}>
             <DialogTrigger asChild>
@@ -292,9 +292,9 @@ export const OrganizationDetails = () => {
             </DialogTrigger>
             <DialogContent className="max-w-2xl">
               <DialogHeader>
-                <DialogTitle>Assign Models to Organization</DialogTitle>
+                <DialogTitle>Assign Models to Department</DialogTitle>
                 <DialogDescription>
-                  Select which models this organization can access
+                  Select which models this department can access
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 max-h-96 overflow-y-auto">
@@ -365,7 +365,7 @@ export const OrganizationDetails = () => {
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">{stats.admin_count}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              Organization administrators
+              Department administrators
             </p>
           </CardContent>
         </Card>
@@ -429,7 +429,7 @@ export const OrganizationDetails = () => {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Organization Admins</CardTitle>
+                  <CardTitle>Department Admins</CardTitle>
                   <CardDescription>
                     Administrators managing this organization
                   </CardDescription>
@@ -445,7 +445,7 @@ export const OrganizationDetails = () => {
                     <DialogHeader>
                       <DialogTitle>Create New Admins</DialogTitle>
                       <DialogDescription>
-                        Add multiple administrators for this organization
+                        Add multiple administrators for this department
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 max-h-96 overflow-y-auto">

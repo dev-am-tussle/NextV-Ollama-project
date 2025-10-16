@@ -167,14 +167,14 @@ export const PreferencesDialog: React.FC<PreferencesDialogProps> = ({
         </Tabs>
 
         <DialogFooter className="flex items-center justify-between">
-          <Button
+          {/* <Button
             variant="outline"
             onClick={handleAdminSettings}
             className="flex items-center gap-2"
           >
             <Shield className="h-4 w-4" />
-            Admin Settings
-          </Button>
+            Admin Settingss
+          </Button> */}
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>

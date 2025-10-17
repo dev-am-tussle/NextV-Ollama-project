@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { ChevronLeftIcon, Pencil, Trash2, Link } from "lucide-react";
+import { useApiKeys } from "@/hooks/use-api-keys";
+import { ExternalApi } from "@/services/apiKeys.service";
 import { useNavigate } from "react-router-dom";
 import {
   AlertDialog,
@@ -22,80 +24,106 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-interface ApiKeyItem {
-  id: string;
-  name: string;
-  key: string;
-  isActive: boolean;
+// Function to mask API key is not needed as backend handles masking
+
+// Mask API key for display when editing (shows first 4 and last 4 characters)
+function maskApiKey(key: string | undefined | null) {
+  if (!key) return "****";
+  try {
+    const k = String(key);
+    if (k.length <= 8) return "****";
+    return `${k.substring(0, 4)}...${k.slice(-4)}`;
+  } catch (_) {
+    return "****";
+  }
 }
 
 export default function ApiConfigPage() {
   const [apiKey, setApiKey] = useState("");
   const [apiName, setApiName] = useState("");
+  const [provider, setProvider] = useState(""); // Default provider
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [savedKeys, setSavedKeys] = useState<ApiKeyItem[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [keyToDelete, setKeyToDelete] = useState<ApiKeyItem | null>(null);
+  const [keyToDelete, setKeyToDelete] = useState<string | null>(null);
   const navigate = useNavigate();
+  
+  const {
+    apiKeys,
+    isLoading,
+    fetchApiKeys,
+    addApiKey,
+    updateApiKey,
+    deleteApiKey,
+    toggleApiStatus
+  } = useApiKeys();
 
-  const handleSaveApiKey = () => {
+  // Fetch API keys when component mounts
+  useEffect(() => {
+    fetchApiKeys();
+  }, [fetchApiKeys]);
+
+  const handleSaveApiKey = async () => {
     if (!apiKey?.trim() || !apiName?.trim()) {
       toast.error("Please enter both API name and key");
       return;
     }
 
-    if (editingId) {
-      // Update existing key
-      setSavedKeys(prev => prev.map(item => 
-        item.id === editingId 
-          ? { ...item, name: apiName, key: apiKey }
-          : item
-      ));
+    try {
+      if (editingId) {
+        // Update existing key
+        await updateApiKey(editingId, {
+          name: apiName,
+          api_key: apiKey,
+          provider
+        });
+      } else {
+        // Add new key
+        await addApiKey({
+          name: apiName,
+          provider,
+          api_key: apiKey
+        });
+      }
+
+      // Clear form
+      setApiKey("");
+      setApiName("");
       setEditingId(null);
-      toast.success("API key updated successfully");
-    } else {
-      // Add new key
-      setSavedKeys(prev => [...prev, {
-        id: Date.now().toString(),
-        name: apiName,
-        key: apiKey,
-        isActive: false
-      }]);
-      toast.success("API key saved successfully");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to save API key");
     }
-
-    // Clear form
-    setApiKey("");
-    setApiName("");
   };
 
-  const handleEdit = (item: ApiKeyItem) => {
+  const handleEdit = (item: ExternalApi) => {
     setApiName(item.name);
-    setApiKey(item.key);
-    setEditingId(item.id);
+    setProvider(item.provider);
+    // We don't set the API key as it's masked from the backend
+    setEditingId(item._id);
   };
 
-  const handleDeleteClick = (item: ApiKeyItem) => {
-    setKeyToDelete(item);
+  const handleDeleteClick = (id: string) => {
+    setKeyToDelete(id);
     setDeleteDialogOpen(true);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (keyToDelete) {
-      setSavedKeys(prev => prev.filter(item => item.id !== keyToDelete.id));
-      toast.success("API key deleted successfully");
-      setDeleteDialogOpen(false);
-      setKeyToDelete(null);
+      try {
+        await deleteApiKey(keyToDelete);
+        setDeleteDialogOpen(false);
+        setKeyToDelete(null);
+      } catch (error: any) {
+        toast.error(error.message || "Failed to delete API key");
+      }
     }
   };
 
-  const handleIntegrate = (id: string) => {
-    setSavedKeys(prev => prev.map(item => ({
-      ...item,
-      isActive: item.id === id ? !item.isActive : item.isActive
-    })));
-    const item = savedKeys.find(k => k.id === id);
-    toast.success(`API key ${item?.isActive ? 'deactivated' : 'activated'} successfully`);
+  const handleIntegrate = async (id: string, currentStatus: boolean) => {
+    try {
+      await toggleApiStatus(id, !currentStatus);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to toggle API key status");
+    }
   };
 
   const handleBackClick = () => {
@@ -139,10 +167,11 @@ export default function ApiConfigPage() {
                 <Label htmlFor="api-key">API Key</Label>
                 <Input
                   id="api-key"
-                  type="password"
+                  type={editingId ? "text" : "password"}
                   placeholder="sk-..."
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
+                  value={editingId ? maskApiKey(apiKey) : apiKey}
+                  onChange={(e) => !editingId && setApiKey(e.target.value)}
+                  disabled={editingId}
                 />
               </div>
             </div>
@@ -171,37 +200,37 @@ export default function ApiConfigPage() {
           </CardFooter>
         </Card>
 
-        {savedKeys.length > 0 && (
+        {apiKeys.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle>Saved API Keys</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {savedKeys.map((item) => (
+                {apiKeys.map((item) => (
                   <div
-                    key={item.id}
+                    key={item._id}
                     className="flex items-center justify-between p-3 rounded-lg border bg-card text-card-foreground shadow-sm"
                   >
                     <div>
                       <h3 className="font-medium">{item.name}</h3>
                       <p className="text-sm text-muted-foreground">
-                        {item.key.substring(0, 8)}...
+                        {item.api_key}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
-                            variant={item.isActive ? "default" : "outline"}
+                            variant={item.is_active ? "default" : "outline"}
                             size="sm"
-                            onClick={() => handleIntegrate(item.id)}
+                            onClick={() => handleIntegrate(item._id, item.is_active)}
                           >
                             <Link className="h-4 w-4" />
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>
-                          {item.isActive ? 'Deactivate' : 'Activate'} API Key
+                          {item.is_active ? 'Deactivate' : 'Activate'} API Key
                         </TooltipContent>
                       </Tooltip>
 
@@ -225,7 +254,7 @@ export default function ApiConfigPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleDeleteClick(item)}
+                            onClick={() => handleDeleteClick(item._id)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -249,7 +278,7 @@ export default function ApiConfigPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the API key "{keyToDelete?.name}". This action cannot be undone.
+              This will permanently delete this API key. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -258,6 +287,13 @@ export default function ApiConfigPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Loading state */}
+      {isLoading && (
+        <div className="fixed inset-0 bg-background/80 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      )}
     </div>
   );
 }

@@ -10,6 +10,16 @@ const UserSettingsSchema = new mongoose.Schema(
     },
     theme: { type: String, default: "light" },
     default_model: { type: String, default: "gemma:2b" },
+    external_apis: [{
+      name: { type: String, required: true },
+      provider: { type: String, },
+      api_key: { type: String, required: true }, // Will store encrypted value
+      is_active: { type: Boolean, default: false },
+      created_at: { type: Date, default: Date.now },
+      updated_at: { type: Date, default: Date.now },
+      last_validated: { type: Date, default: null },
+      metadata: { type: Object, default: {} } // For provider-specific details
+    }],
     // User's pulled/downloaded models (empty by default until user downloads)
     pulled_models: [{
       model_id: {

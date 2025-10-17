@@ -23,6 +23,7 @@ import superAdminRoutes from "./routes/superAdmin.routes.js";
 import unifiedAuthRoutes from "./routes/unifiedAuth.routes.js";
 import invitationRoutes from "./routes/invitation.routes.js";
 import categorizedModelsRoutes from "./routes/categorizedModels.routes.js";
+import externalApisRoutes from "./routes/externalApis.routes.js";
 import jwt from "jsonwebtoken";
 import { connectDB, closeDB } from "./config/ollama.db.js"; // DB helpers import
 
@@ -85,6 +86,7 @@ app.use("/api/v1/conversations", conversationRoutes);
 app.use("/api/v1/saved-prompts", savedPromptsRoutes);
 app.use("/api/v1/files", filesRoutes);
 app.use("/api/v1/auth", oauthRoutes);
+app.use("/api/v1/external-apis", externalApisRoutes);
 
 // Admin routes
 app.use("/api/admin/auth", adminAuthRoutes);

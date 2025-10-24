@@ -77,3 +77,6 @@ export function authenticateToken(req, res, next) {
     return res.status(500).json({ error: "Authentication check failed" });
   }
 }
+
+// Export auth as alias for requireAuth (for backward compatibility)
+export const auth = requireAuth;

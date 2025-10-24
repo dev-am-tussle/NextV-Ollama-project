@@ -10,6 +10,7 @@ const UserSettingsSchema = new mongoose.Schema(
     },
     theme: { type: String, default: "light" },
     default_model: { type: String, default: "gemma:2b" },
+    // User's external API configurations
     external_apis: [{
       name: { type: String, required: true },
       provider: { type: String, },

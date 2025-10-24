@@ -28,4 +28,16 @@ router.put("/organization/:modelId/toggle", adminModelsController.toggleOrganiza
 router.delete("/organization/:modelId", adminModelsController.deleteOrganizationModel);
 router.get("/organization/analytics", adminModelsController.getOrganizationModelAnalytics);
 
+// =========================
+// ADMIN EXTERNAL API ROUTES
+// =========================
+
+// Admin External API Management
+router.get("/external-apis", adminModelsController.getAdminExternalApis);
+router.post("/external-apis/validate", adminModelsController.validateAdminApiKey);
+router.post("/external-apis/save", adminModelsController.saveAdminApiKey);
+router.patch("/external-apis/:apiId/toggle", adminModelsController.toggleAdminApiStatus);
+router.delete("/external-apis/:apiId", adminModelsController.deleteAdminExternalApi);
+router.post("/external-apis/sync", adminModelsController.syncAllAdminExternalModels);
+
 export default router;

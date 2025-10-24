@@ -110,6 +110,18 @@ const AdminSettingsSchema = new mongoose.Schema(
           enum: ['downloading', 'completed', 'failed'],
           default: 'completed'
         }
+      }],
+
+      // Admin's external API configurations
+      external_apis: [{
+        name: { type: String, required: true },
+        provider: { type: String, required: true },
+        api_key: { type: String, required: true }, // Will store encrypted value
+        is_active: { type: Boolean, default: false },
+        created_at: { type: Date, default: Date.now },
+        updated_at: { type: Date, default: Date.now },
+        last_validated: { type: Date, default: null },
+        metadata: { type: Object, default: {} } // For provider-specific details like models
       }]
     },
 

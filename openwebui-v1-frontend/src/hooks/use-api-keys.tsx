@@ -27,10 +27,10 @@ export function useApiKeys() {
   }, [toast]);
 
   // Add new API key
-  const addApiKey = useCallback(async (data: { name: string; provider: string; api_key: string }) => {
+  const addApiKey = useCallback(async (data: { name: string; provider: string; api_key: string; models?: any[]; modelCount?: number; selectedModels?: any[] }) => {
     setIsLoading(true);
     try {
-      const response = await apiKeysService.addApiKey(data);
+      const response = await apiKeysService.saveApiKey(data);
       if (response.success) {
         toast({
           title: 'Success',
@@ -50,6 +50,11 @@ export function useApiKeys() {
       setIsLoading(false);
     }
   }, [fetchApiKeys, toast]);
+
+  // Save API key (alias for addApiKey)
+  const saveApiKey = useCallback(async (data: { name: string; provider: string; api_key: string; models?: any[]; modelCount?: number; selectedModels?: any[] }) => {
+    return addApiKey(data);
+  }, [addApiKey]);
 
   // Update API key
   const updateApiKey = useCallback(async (apiId: string, updates: Partial<ExternalApi>) => {
@@ -126,13 +131,40 @@ export function useApiKeys() {
     }
   }, [fetchApiKeys, toast]);
 
+  // Verify API key with provider
+  const verifyApiKey = useCallback(async (data: { provider: string; api_key: string; name?: string }) => {
+    setIsLoading(true);
+    try {
+      const response = await apiKeysService.verifyApiKey(data);
+      if (response.success) {
+        const modelCount = (response.data as any)?.modelCount ?? 0;
+        toast({
+          title: 'Validation Successful',
+          description: `API key validated with ${data.provider}. Found ${modelCount} models.`,
+        });
+      }
+      return response;
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Validation Failed',
+        description: error.message,
+      });
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
+
   return {
     apiKeys,
     isLoading,
     fetchApiKeys,
     addApiKey,
+    saveApiKey,
     updateApiKey,
     deleteApiKey,
     toggleApiStatus,
+    verifyApiKey,
   };
 }

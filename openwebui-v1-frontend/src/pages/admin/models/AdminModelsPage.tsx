@@ -4,8 +4,12 @@ import { AdminKPICards } from "./components/AdminKPICards";
 import { AdminFiltersToolbar } from "./components/AdminFiltersToolbar";
 import { AdminModelsTable } from "./components/AdminModelsTable";
 import { AdminModelSlideOver } from "./components/AdminModelSlideOver";
+import { AdminExternalApiManager } from "@/components/admin/AdminExternalApiManager";
+import { AdminApiErrorBoundary } from "@/components/admin/AdminApiErrorBoundary";
 import { adminModelsService, type AdminModel } from "@/services/adminModelsService";
 import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Settings } from "lucide-react";
 
 export const AdminModelsPage = () => {
     const { toast } = useToast();
@@ -23,6 +27,9 @@ export const AdminModelsPage = () => {
     // SlideOver state
     const [slideOverOpen, setSlideOverOpen] = useState(false);
     const [selectedModel, setSelectedModel] = useState<AdminModel | null>(null);
+    
+    // API Manager state
+    const [apiManagerOpen, setApiManagerOpen] = useState(false);
 
     // Fetch organization models
     const {
@@ -243,12 +250,22 @@ export const AdminModelsPage = () => {
                         Manage your department's AI models and monitor usage analytics
                     </p>
                 </div>
-                <button
-                    onClick={resetFilters}
-                    className="px-4 py-2 text-sm bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80"
-                >
-                    Reset Filters
-                </button>
+                <div className="flex items-center gap-3">
+                    <Button
+                        variant="outline"
+                        onClick={() => setApiManagerOpen(true)}
+                        className="flex items-center gap-2"
+                    >
+                        <Settings className="h-4 w-4" />
+                        API Configuration
+                    </Button>
+                    <button
+                        onClick={resetFilters}
+                        className="px-4 py-2 text-sm bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80"
+                    >
+                        Reset Filters
+                    </button>
+                </div>
             </div>
 
             {/* KPI Cards */}
@@ -292,6 +309,14 @@ export const AdminModelsPage = () => {
                 onToggleModel={handleToggleModel}
                 onDeleteModel={handleDeleteModel}
             />
+
+            {/* Admin External API Manager */}
+            <AdminApiErrorBoundary>
+                <AdminExternalApiManager
+                    open={apiManagerOpen}
+                    onOpenChange={setApiManagerOpen}
+                />
+            </AdminApiErrorBoundary>
         </div>
     );
 };

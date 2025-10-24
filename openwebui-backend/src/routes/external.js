@@ -7,8 +7,7 @@ import {
   deleteExternalApi,
   toggleApiStatus,
   validateApiKey,
-  saveApiKey,
-  verifyAndActivateKey
+  saveApiKey
 } from "../controllers/externalApis.controller.js";
 
 const router = express.Router();
@@ -25,13 +24,10 @@ router.post("/validate-key", validateApiKey);
 // POST /api/v1/external-apis/save-key - Save validated API key
 router.post("/save-key", saveApiKey);
 
-// POST /api/v1/external-apis/verify - Legacy verify API key with provider
-router.post("/verify", verifyAndActivateKey);
+// Legacy verify endpoint (keeping for backward compatibility)
+router.post("/verify", validateApiKey);
 
-// PATCH /api/v1/external-apis/:apiId/toggle - Toggle API activation status (specific route first)
-router.patch("/:apiId/toggle", toggleApiStatus);
-
-// POST /api/v1/external-apis - Add a new external API
+// POST /api/v1/external-apis - Add a new external API (legacy)
 router.post("/", addExternalApi);
 
 // PATCH /api/v1/external-apis/:apiId - Update an external API
@@ -39,5 +35,8 @@ router.patch("/:apiId", updateExternalApi);
 
 // DELETE /api/v1/external-apis/:apiId - Delete an external API
 router.delete("/:apiId", deleteExternalApi);
+
+// POST /api/v1/external-apis/:apiId/toggle - Toggle API activation status
+router.post("/:apiId/toggle", toggleApiStatus);
 
 export default router;

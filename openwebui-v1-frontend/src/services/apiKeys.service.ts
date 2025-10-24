@@ -8,6 +8,12 @@ export interface ExternalApi {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  metadata?: {
+    models?: any[];
+    modelCount?: number;
+    selectedModels?: any[];
+    lastRefreshed?: string;
+  };
 }
 
 export interface ApiKeyResponse {
@@ -18,7 +24,7 @@ export interface ApiKeyResponse {
 }
 
 class ApiKeysService {
-  private readonly baseUrl = '/api/v1/external-apis';
+  private readonly baseUrl = '/api/v1/user/external-apis';
 
   // Get all API keys
   async getAllApiKeys(): Promise<ApiKeyResponse> {
@@ -30,7 +36,45 @@ class ApiKeysService {
     }
   }
 
-  // Add new API key
+  // Validate user API key
+  async validateApiKey(data: { provider?: string; api_key: string; name?: string }): Promise<ApiKeyResponse> {
+    try {
+      const response = await axiosInstance.post(`${this.baseUrl}/validate`, {
+        apiKey: data.api_key,
+        provider: data.provider,
+        name: data.name
+      });
+      return response.data;
+    } catch (error: any) {
+      throw this.handleError(error);
+    }
+  }
+
+  // Save validated user API key with selected models
+  async saveApiKey(data: { 
+    name: string; 
+    provider: string; 
+    api_key: string; 
+    models?: any[];
+    modelCount?: number;
+    selectedModels?: any[];
+  }): Promise<ApiKeyResponse> {
+    try {
+      const response = await axiosInstance.post(`${this.baseUrl}/save`, {
+        name: data.name,
+        provider: data.provider,
+        apiKey: data.api_key,
+        models: data.models,
+        modelCount: data.modelCount,
+        selectedModels: data.selectedModels
+      });
+      return response.data;
+    } catch (error: any) {
+      throw this.handleError(error);
+    }
+  }
+
+  // Add new API key (legacy method)
   async addApiKey(data: { name: string; provider: string; api_key: string }): Promise<ApiKeyResponse> {
     try {
       const response = await axiosInstance.post(this.baseUrl, data);
@@ -68,6 +112,11 @@ class ApiKeysService {
     } catch (error: any) {
       throw this.handleError(error);
     }
+  }
+
+  // Verify API key with provider before saving (alias for validateApiKey)
+  async verifyApiKey(data: { provider: string; api_key: string; name?: string }): Promise<ApiKeyResponse> {
+    return this.validateApiKey(data);
   }
 
   private handleError(error: any): Error {

@@ -10,7 +10,7 @@ import React, { useState, useEffect } from 'react';
 export interface OrgAdminLayoutProps {
   children: React.ReactNode;
   activeTab: string;
-  setActiveTab: (tab: 'dashboard' | 'users' | 'branding') => void;
+  setActiveTab: (tab: 'dashboard' | 'models' | 'users' | 'branding' | 'setting') => void;
   orgSlug?: string;
 }
 

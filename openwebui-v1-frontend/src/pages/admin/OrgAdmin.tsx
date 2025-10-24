@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { OrgAdminLayout, OrgAnalytics, UserManagement, BrandingSettings } from "@/components/admin/org";
 import { AdminModelsPage } from "./models";
+import AdminSettingsPage from "./AdminSettingsPage";
 
 type TabType = "dashboard" | "models" | "users" | "branding" | "setting";
 
@@ -15,7 +16,7 @@ const OrgAdmin = () => {
       {activeTab === "models" && <AdminModelsPage />}
       {activeTab === "users" && <UserManagement orgSlug={slug} />}
       {activeTab === "branding" && <BrandingSettings orgSlug={slug} />}
-      {activeTab === "setting" && <div>Settings Content</div>}
+      {activeTab === "setting" && <AdminSettingsPage />}
     </OrgAdminLayout>
   );
 };

@@ -16,6 +16,7 @@ import { useChatMessaging } from "@/hooks/useChatMessaging";
 import { ChatStatusBar } from "@/components/chat/ChatStatusBar";
 import ChatGeneratingOverlay from "@/components/chat/ChatGeneratingOverlay";
 import { ChatServiceInterface, getModelSuggestions } from "@/services/chatService";
+import { CompareBar } from "@/components/Compare/CompareBar";
 
 export interface Message {
   id: string;
@@ -485,6 +486,9 @@ const BaseChatInterface: React.FC<BaseChatInterfaceProps> = ({
             onOpenSettings={openSettings}
             onOpenPreferences={() => setIsPreferencesOpen(true)}
           />
+          
+          {/* Compare Bar - Shows selected models for comparison */}
+          <CompareBar />
 
           <div
             ref={scrollRef}

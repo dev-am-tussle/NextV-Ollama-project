@@ -7,7 +7,9 @@ import {
     Info,
     ChevronLeft,
     ChevronRight,
-    Trash2
+    Trash2,
+    Cloud,
+    Database
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -164,17 +166,31 @@ export const AdminModelsTable = ({
                                 >
                                     <TableCell>
                                         <div className="space-y-1">
-                                            <div className="font-medium text-foreground">
-                                                {model.display_name}
+                                            <div className="flex items-center gap-2">
+                                                <div className="font-medium text-foreground">
+                                                    {model.display_name}
+                                                </div>
+                                                {model.source_type === 'external_api' && (
+                                                    <div className="flex items-center" title="External API Model">
+                                                        <Cloud className="h-3 w-3 text-violet-500" />
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className="text-sm text-muted-foreground">
                                                 {model.name}
                                             </div>
-                                            {model.parameters && (
-                                                <Badge variant="outline" className="text-xs">
-                                                    {model.parameters}
-                                                </Badge>
-                                            )}
+                                            <div className="flex gap-1 flex-wrap">
+                                                {model.parameters && (
+                                                    <Badge variant="outline" className="text-xs">
+                                                        {model.parameters}
+                                                    </Badge>
+                                                )}
+                                                {model.source_type === 'external_api' && model.provider && (
+                                                    <Badge variant="secondary" className="text-xs bg-violet-100 text-violet-800 dark:bg-violet-900/20 dark:text-violet-400">
+                                                        {model.provider}
+                                                    </Badge>
+                                                )}
+                                            </div>
                                         </div>
                                     </TableCell>
                                     <TableCell>
@@ -211,13 +227,19 @@ export const AdminModelsTable = ({
                                         </div>
                                     </TableCell>
                                     <TableCell className="text-center">
-                                        <Switch
-                                            checked={model.org_enabled}
-                                            onCheckedChange={(checked) => 
-                                                onToggleModel(model._id, checked)
-                                            }
-                                            onClick={(e) => e.stopPropagation()}
-                                        />
+                                        {model.source_type === 'external_api' ? (
+                                            <Badge variant="outline" className="text-xs">
+                                                External
+                                            </Badge>
+                                        ) : (
+                                            <Switch
+                                                checked={model.org_enabled}
+                                                onCheckedChange={(checked) => 
+                                                    onToggleModel(model._id, checked)
+                                                }
+                                                onClick={(e) => e.stopPropagation()}
+                                            />
+                                        )}
                                     </TableCell>
                                     <TableCell className="text-center">
                                         <div className="flex items-center justify-center space-x-1">
@@ -232,18 +254,20 @@ export const AdminModelsTable = ({
                                             >
                                                 <Eye className="h-4 w-4" />
                                             </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onDeleteModel(model._id);
-                                                }}
-                                                className="text-destructive hover:text-destructive"
-                                                title="Delete from organization"
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
+                                            {model.source_type !== 'external_api' && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onDeleteModel(model._id);
+                                                    }}
+                                                    className="text-destructive hover:text-destructive"
+                                                    title="Delete from organization"
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            )}
                                         </div>
                                     </TableCell>
                                 </TableRow>

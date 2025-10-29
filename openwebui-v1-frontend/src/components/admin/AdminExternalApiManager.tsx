@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -50,6 +51,8 @@ export function AdminExternalApiManager({ open, onOpenChange }: Props) {
   const [selectedModels, setSelectedModels] = useState<string[]>([]);
   const [showModelSelection, setShowModelSelection] = useState(false);
 
+  const queryClient = useQueryClient();
+
   const {
     adminApiKeys,
     isLoading,
@@ -78,6 +81,13 @@ export function AdminExternalApiManager({ open, onOpenChange }: Props) {
       fetchAdminApiKeys();
     }
   }, [open, fetchAdminApiKeys]);
+
+  // Helper function for immediate dashboard update
+  const triggerDashboardUpdate = async () => {
+    // Immediately invalidate the combined models query for instant UI update
+    await queryClient.invalidateQueries({ queryKey: ["admin-combined-models"] });
+    await queryClient.invalidateQueries({ queryKey: ["admin-organization-analytics"] });
+  };
 
   const handleValidateKey = async () => {
     // Enhanced input validation
@@ -347,6 +357,9 @@ export function AdminExternalApiManager({ open, onOpenChange }: Props) {
           `✅ Admin API key saved successfully! ${selectedModels.length} models selected and saved.`, 
           { id: saveToastId, duration: 5000 }
         );
+        
+        // Trigger immediate dashboard update
+        await triggerDashboardUpdate();
       }
 
       // Clear form after successful save
@@ -449,9 +462,12 @@ export function AdminExternalApiManager({ open, onOpenChange }: Props) {
         toast.loading("Step 3/4: Activating admin API key...", { id: toastId });
         await toggleAdminApiStatus(apiItem._id, true);
         
-        // Step 4: Sync models
+        // Step 4: Sync models and update dashboard
         toast.loading("Step 4/4: Syncing external models...", { id: toastId });
         await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Trigger immediate dashboard update
+        await triggerDashboardUpdate();
         
         // Success
         toast.success(`✅ Admin API activated successfully! Models are now available organization-wide.`, {
@@ -463,6 +479,10 @@ export function AdminExternalApiManager({ open, onOpenChange }: Props) {
         // Deactivate
         toast.loading("Deactivating admin API key...", { id: toastId });
         await toggleAdminApiStatus(apiItem._id, false);
+        
+        // Trigger immediate dashboard update
+        await triggerDashboardUpdate();
+        
         toast.success("Admin API key deactivated successfully", { id: toastId });
       }
     } catch (error: any) {

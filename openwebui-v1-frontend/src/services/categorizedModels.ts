@@ -42,12 +42,26 @@ export interface AvailableForPurchaseModel extends ModelBase {
   recommended?: boolean;
 }
 
+export interface AvailableApiModel extends ModelBase {
+  is_external_api: boolean;
+  external_source: {
+    type: 'user' | 'admin';
+    api_name: string;
+    provider: string;
+    model_id: string;
+    context_length?: number;
+    user_id?: string;
+    admin_id?: string;
+  };
+}
+
 export interface CategorizedModelsResponse {
   success: boolean;
   data: {
     downloaded: DownloadedModel[];
     availableToDownload: AvailableToDownloadModel[];
     availableGlobal: AvailableForPurchaseModel[];
+    availableApi: AvailableApiModel[]; // New category for API models
   };
   user: {
     id: string;
@@ -137,7 +151,21 @@ export interface DownloadCallbacks {
   onComplete?: (result: DownloadProgress) => void;
 }
 
-// Download model with real-time progress tracking
+// Select a model (traditional or API)
+export async function selectModel(modelName: string): Promise<{ 
+  success: boolean; 
+  model_type: 'traditional' | 'external_api';
+  routing_info: any;
+  message: string; 
+}> {
+  return apiFetch("models/select", {
+    method: "POST",
+    body: JSON.stringify({ modelName }),
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  });
+}
 export async function downloadModelWithProgress(
   modelName: string, 
   callbacks: DownloadCallbacks

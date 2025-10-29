@@ -18,6 +18,7 @@ router.get("/available", requireAuth, modelsController.getUserAvailableModels);
 router.post("/refresh", requireAuth, modelsController.refreshUserModels);
 
 // Protected endpoints for model management
+router.post("/select", requireAuth, modelsController.selectModel);
 router.post("/pull", requireAuth, modelsController.pullModelWithProgress);
 router.post("/mark-downloaded", requireAuth, modelsController.markModelAsDownloadedController);
 router.post("/update-usage", requireAuth, modelsController.updateModelUsageController);

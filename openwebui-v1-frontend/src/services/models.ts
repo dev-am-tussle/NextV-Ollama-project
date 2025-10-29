@@ -306,3 +306,106 @@ export interface CategorizedModelsResponse {
 export async function getUserCategorizedModels(userId: string): Promise<CategorizedModelsResponse> {
   return apiFetch(`available-models/user/${userId}/list`);
 }
+
+// =========================
+// ADMIN COMBINED MODELS API
+// =========================
+
+export interface AdminCombinedModel {
+  _id: string;
+  name: string;
+  display_name: string;
+  description: string;
+  size: string;
+  category: string;
+  tags: string[];
+  performance_tier: "fast" | "balanced" | "powerful";
+  min_ram_gb: number;
+  provider?: string;
+  model_family?: string;
+  parameters?: string;
+  use_cases: string[];
+  external_source?: {
+    api_name: string;
+    api_id: string;
+    provider: string;
+    model_id: string;
+    context_length?: number;
+  };
+}
+
+export interface AdminCombinedModelsResponse {
+  success: boolean;
+  message: string;
+  data: {
+    models: {
+      organization: AdminCombinedModel[];
+      external_apis: AdminCombinedModel[];
+      combined: AdminCombinedModel[];
+    };
+    statistics: {
+      total_models: number;
+      organization_models: number;
+      external_models: number;
+      models_by_tier: {
+        fast: number;
+        balanced: number;
+        powerful: number;
+      };
+      models_by_category: Record<string, number>;
+    };
+    external_apis: {
+      active_count: number;
+      total_count: number;
+      apis: Array<{
+        id: string;
+        name: string;
+        provider: string;
+        models_count: number;
+        last_validated?: string;
+        is_active: boolean;
+      }>;
+    };
+    admin_info: {
+      id: string;
+      name: string;
+      email: string;
+      organization: {
+        id: string;
+        name: string;
+        allowed_models_count: number;
+      };
+    };
+  };
+  timestamp: string;
+}
+
+export interface AdminModelsStatisticsResponse {
+  success: boolean;
+  message: string;
+  data: {
+    total_models: number;
+    organization_models: number;
+    external_models: number;
+    models_by_tier: Record<string, number>;
+    models_by_category: Record<string, number>;
+    providers: Record<string, number>;
+    size_distribution: Record<string, number>;
+    external_api_status: {
+      active_apis: number;
+      total_apis: number;
+      avg_models_per_api: number;
+    };
+  };
+  timestamp: string;
+}
+
+// Get combined models for admin dashboard (organization + external APIs)
+export async function getAdminCombinedModels(): Promise<AdminCombinedModelsResponse> {
+  return adminApiFetch("/api/admin/models/combined");
+}
+
+// Get detailed statistics for admin dashboard
+export async function getAdminModelsStatistics(): Promise<AdminModelsStatisticsResponse> {
+  return adminApiFetch("/api/admin/models/statistics");
+}

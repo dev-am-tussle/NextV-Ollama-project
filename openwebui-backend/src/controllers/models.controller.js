@@ -1,6 +1,8 @@
 import { AvailableModel } from "../models/availableModel.model.js";
 import { User, UserSettings } from "../models/user.models.js";
 import { Organization } from "../models/organization.model.js";
+import { Admin } from "../models/admin.model.js";
+import { AdminSettings } from "../models/adminSettings.model.js";
 import { pullModel, verifyModelInstalled, removeModel } from "../services/ollama.service.js";
 import { 
   getUserCategorizedModels, 
@@ -11,6 +13,85 @@ import {
 import { decryptApiKey } from "../utils/encryption.js";
 import { getProviderModels } from "../adapters/index.js";
 import { formatModelsResponse } from "../utils/providerTools.js";
+
+// Helper function to check if model is external API based
+function isExternalApiModel(modelName) {
+  return modelName.startsWith('user_external_') || modelName.startsWith('admin_external_');
+}
+
+// Helper function to get external API info from model name
+async function getExternalApiInfo(modelName, userId) {
+  if (!isExternalApiModel(modelName)) {
+    return null;
+  }
+
+  const isAdminModel = modelName.startsWith('admin_external_');
+  const isUserModel = modelName.startsWith('user_external_');
+
+  if (isUserModel) {
+    // Get user's external API settings
+    const userSettings = await UserSettings.findOne({ user_id: userId });
+    if (userSettings && userSettings.external_apis) {
+      const parts = modelName.split('_');
+      const provider = parts[2];
+      const modelId = parts.slice(3).join('_');
+      
+      const api = userSettings.external_apis.find(api => 
+        api.provider === provider && 
+        api.is_active &&
+        api.metadata?.models?.some(m => (m.id || m.name) === modelId)
+      );
+      
+      if (api) {
+        return {
+          type: 'user',
+          provider: api.provider,
+          api_key: api.api_key,
+          model_id: modelId,
+          api_name: api.name
+        };
+      }
+    }
+  } else if (isAdminModel) {
+    // Get admin's external API settings
+    const user = await User.findById(userId);
+    if (user && user.organization_id) {
+      const allOrgAdmins = await Admin.find({ organization_id: user.organization_id });
+      const orgAdminIds = allOrgAdmins.map(a => a._id);
+      
+      const allAdminSettings = await AdminSettings.find({ 
+        admin_id: { $in: orgAdminIds }
+      });
+      
+      for (const adminSetting of allAdminSettings) {
+        if (adminSetting.settings?.external_apis) {
+          const parts = modelName.split('_');
+          const provider = parts[2];
+          const modelId = parts.slice(3).join('_');
+          
+          const api = adminSetting.settings.external_apis.find(api => 
+            api.provider === provider && 
+            api.is_active &&
+            (api.metadata?.selectedModels || api.metadata?.models)?.some(m => (m.id || m.name) === modelId)
+          );
+          
+          if (api) {
+            return {
+              type: 'admin',
+              provider: api.provider,
+              api_key: api.api_key,
+              model_id: modelId,
+              api_name: api.name,
+              admin_id: adminSetting.admin_id
+            };
+          }
+        }
+      }
+    }
+  }
+
+  return null;
+}
 
 // GET /api/v1/models - Users see active models
 export async function getActiveModels(req, res) {
@@ -277,7 +358,56 @@ export async function updateModelUsageController(req, res) {
   }
 }
 
-// GET /api/v1/models/user/:id/list - Get categorized models for specific user
+// POST /api/v1/models/select - Handle model selection (traditional or API)
+export async function selectModel(req, res) {
+  try {
+    const userId = req.user.id;
+    const { modelName, prompt } = req.body;
+    
+    if (!modelName) {
+      return res.status(400).json({
+        success: false,
+        error: "Model name is required"
+      });
+    }
+
+    // Check if this is an external API model
+    const apiInfo = await getExternalApiInfo(modelName, userId);
+    
+    if (apiInfo) {
+      // This is an external API model - return API routing info
+      res.json({
+        success: true,
+        model_type: 'external_api',
+        routing_info: {
+          provider: apiInfo.provider,
+          model_id: apiInfo.model_id,
+          api_source: apiInfo.type,
+          api_name: apiInfo.api_name
+        },
+        message: `Ready to use ${apiInfo.provider} model: ${apiInfo.model_id}`
+      });
+    } else {
+      // This is a traditional model - return local routing info
+      res.json({
+        success: true,
+        model_type: 'traditional',
+        routing_info: {
+          model_name: modelName,
+          local: true
+        },
+        message: `Ready to use local model: ${modelName}`
+      });
+    }
+
+  } catch (error) {
+    console.error("Error selecting model:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Failed to select model"
+    });
+  }
+}
 export async function getUserModelsList(req, res) {
   try {
     const { id: userId } = req.params;
@@ -298,7 +428,7 @@ export async function getUserModelsList(req, res) {
       });
     }
 
-    // Get user settings to find pulled models
+    // Get user settings to find pulled models and external APIs
     const userSettings = await UserSettings.findOne({ user_id: userId });
     const pulledModelIds = userSettings?.pulled_models?.map(pm => pm.model_id.toString()) || [];
 
@@ -312,15 +442,16 @@ export async function getUserModelsList(req, res) {
         ?.map(am => am.model_id.toString()) || [];
     }
 
-    // Get all available models
+    // Get all available models (traditional models)
     const allModels = await AvailableModel.find({ is_active: true })
       .select('-created_at -updated_at')
       .sort({ model_family: 1, parameters: 1 });
 
-    // Categorize models
+    // Categorize traditional models
     const downloaded = [];
     const availableToDownload = [];
     const availableGlobal = [];
+    const availableApi = []; // New category for API-based models
 
     allModels.forEach(model => {
       const modelIdStr = model._id.toString();
@@ -337,12 +468,136 @@ export async function getUserModelsList(req, res) {
       }
     });
 
+    // =======================
+    // EXTERNAL API MODELS
+    // =======================
+    
+    const externalApiModels = [];
+    const seenExternalModels = new Set(); // To avoid duplicates
+    
+    // 1. Get User's Personal External API Models (from UserSettings)
+    if (userSettings && userSettings.external_apis) {
+      const activeUserApis = userSettings.external_apis.filter(api => api.is_active);
+      
+      for (const api of activeUserApis) {
+        if (api.metadata && api.metadata.models) {
+          const userModels = api.metadata.models || [];
+          
+          for (const model of userModels) {
+            const modelKey = `${api.provider}_${model.id || model.name}`;
+            
+            if (!seenExternalModels.has(modelKey)) {
+              seenExternalModels.add(modelKey);
+              
+              externalApiModels.push({
+                _id: `user_external_${api.provider}_${model.id || model.name}`,
+                name: model.name || model.id,
+                display_name: model.name || model.id,
+                description: model.description || `External model from ${api.provider}`,
+                size: 'API',
+                category: model.category || 'external',
+                tags: ['external', 'user', api.provider],
+                performance_tier: model.performance_tier || 'balanced',
+                min_ram_gb: 0, // External APIs don't require local RAM
+                use_cases: model.use_cases || ['general'],
+                provider: api.provider,
+                model_family: model.model_family || 'external',
+                parameters: model.parameters || model.context_length?.toString() || '-',
+                is_external_api: true, // Flag to identify API models
+                // External model specific fields
+                external_source: {
+                  type: 'user',
+                  api_name: api.name,
+                  provider: api.provider,
+                  model_id: model.id || model.name,
+                  context_length: model.context_length,
+                  user_id: userId
+                }
+              });
+            }
+          }
+        }
+      }
+    }
+    
+    // 2. Get Admin External API Models (from Organization level)
+    if (user.organization_id) {
+      try {
+        // Find all admins in the same organization
+        const allOrgAdmins = await Admin.find({ organization_id: user.organization_id });
+        const orgAdminIds = allOrgAdmins.map(a => a._id);
+        
+        // Get external API settings from all organization admins
+        const allAdminSettings = await AdminSettings.find({ 
+          admin_id: { $in: orgAdminIds }
+        });
+        
+        // Filter only those with external APIs
+        const adminSettingsWithAPIs = allAdminSettings.filter(setting => 
+          setting.settings?.external_apis && 
+          Array.isArray(setting.settings.external_apis) && 
+          setting.settings.external_apis.length > 0
+        );
+        
+        // Collect all unique external API models from all org admins
+        for (const adminSetting of adminSettingsWithAPIs) {
+          const adminApis = adminSetting.settings?.external_apis?.filter(api => api.is_active) || [];
+          
+          for (const api of adminApis) {
+            // Check both selectedModels and models for backward compatibility
+            const selectedModels = api.metadata?.selectedModels || api.metadata?.models || [];
+            
+            for (const model of selectedModels) {
+              const modelKey = `${api.provider}_${model.id || model.name}`;
+              
+              if (!seenExternalModels.has(modelKey)) {
+                seenExternalModels.add(modelKey);
+                
+                externalApiModels.push({
+                  _id: `admin_external_${api.provider}_${model.id || model.name}`,
+                  name: model.name || model.id,
+                  display_name: model.name || model.id,
+                  description: model.description || `External model from ${api.provider} (Admin provided)`,
+                  size: 'API',
+                  category: model.category || 'external',
+                  tags: ['external', 'admin', api.provider],
+                  performance_tier: model.performance_tier || 'balanced',
+                  min_ram_gb: 0, // External APIs don't require local RAM
+                  use_cases: model.use_cases || ['general'],
+                  provider: api.provider,
+                  model_family: model.model_family || 'external',
+                  parameters: model.parameters || model.context_length?.toString() || '-',
+                  is_external_api: true, // Flag to identify API models
+                  // External model specific fields
+                  external_source: {
+                    type: 'admin',
+                    api_name: api.name,
+                    provider: api.provider,
+                    model_id: model.id || model.name,
+                    context_length: model.context_length,
+                    admin_id: adminSetting.admin_id
+                  }
+                });
+              }
+            }
+          }
+        }
+      } catch (adminError) {
+        console.error("Error fetching admin external APIs for user:", adminError);
+        // Continue processing even if admin fetch fails
+      }
+    }
+
+    // Add external API models to availableApi category (separate from downloads)
+    const enhancedAvailableApi = [...externalApiModels];
+
     res.json({
       success: true,
       data: {
         downloaded,
         availableToDownload,
-        availableGlobal
+        availableGlobal,
+        availableApi: enhancedAvailableApi // New category for API models
       },
       user: {
         id: user._id,
@@ -352,6 +607,11 @@ export async function getUserModelsList(req, res) {
           id: organization._id,
           name: organization.name
         } : null
+      },
+      external_apis_summary: {
+        total_external_models: externalApiModels.length,
+        user_apis_models: externalApiModels.filter(m => m.external_source.type === 'user').length,
+        admin_apis_models: externalApiModels.filter(m => m.external_source.type === 'admin').length
       }
     });
 

@@ -88,7 +88,15 @@ export const AdminSettingsPage: React.FC = () => {
       const response = await adminApiService.getAdminExternalApis();
       setSettings(prev => ({
         ...prev,
-        external_apis: response.apis || []
+        external_apis: (response.apis || []).map(api => ({
+          id: api._id,
+          name: api.name,
+          provider: api.provider,
+          is_active: api.is_active,
+          // model_count: api.model_count,
+          // last_sync: api.last_sync,
+          // status: api.status,
+        }))
       }));
     } catch (error) {
       console.error('Failed to load admin settings:', error);
@@ -520,7 +528,7 @@ export const AdminSettingsPage: React.FC = () => {
         {/* External API Manager Dialog */}
         {showApiManager && (
           <AdminExternalApiManager
-            isOpen={showApiManager}
+            open={showApiManager}
             onClose={() => {
               setShowApiManager(false);
               setEditingApi(null);

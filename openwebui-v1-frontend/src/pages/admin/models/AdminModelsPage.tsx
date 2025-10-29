@@ -23,6 +23,7 @@ export const AdminModelsPage = () => {
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize] = useState(20);
+    const [showExternalModels, setShowExternalModels] = useState(true);
 
     // SlideOver state
     const [slideOverOpen, setSlideOverOpen] = useState(false);
@@ -31,32 +32,15 @@ export const AdminModelsPage = () => {
     // API Manager state
     const [apiManagerOpen, setApiManagerOpen] = useState(false);
 
-    // Fetch organization models
+    // Fetch combined models (organization + external APIs)
     const {
-        data: modelsResponse,
+        data: combinedModelsResponse,
         isLoading,
         isError,
         refetch
     } = useQuery({
-        queryKey: [
-            "admin-organization-models",
-            currentPage,
-            pageSize,
-            categoryFilter,
-            tierFilter,
-            searchQuery,
-            sortBy,
-            sortOrder
-        ],
-        queryFn: () => adminModelsService.getOrganizationModels({
-            page: currentPage,
-            limit: pageSize,
-            category: categoryFilter && categoryFilter !== "all" ? categoryFilter : undefined,
-            performance_tier: tierFilter && tierFilter !== "all" ? tierFilter : undefined,
-            search: searchQuery || undefined,
-            sort_by: sortBy,
-            sort_order: sortOrder
-        }),
+        queryKey: ["admin-combined-models"],
+        queryFn: () => adminModelsService.getCombinedModelsForUI(),
         staleTime: 30000, // 30 seconds
     });
 
@@ -73,31 +57,13 @@ export const AdminModelsPage = () => {
             adminModelsService.toggleOrganizationModel(modelId, enabled),
         onMutate: async ({ modelId, enabled }) => {
             // Cancel any outgoing refetches
-            await queryClient.cancelQueries({ queryKey: ["admin-organization-models"] });
+            await queryClient.cancelQueries({ queryKey: ["admin-combined-models"] });
 
             // Snapshot the previous value
-            const previousModels = queryClient.getQueryData([
-                "admin-organization-models",
-                currentPage,
-                pageSize,
-                categoryFilter,
-                tierFilter,
-                searchQuery,
-                sortBy,
-                sortOrder
-            ]);
+            const previousData = queryClient.getQueryData(["admin-combined-models"]);
 
             // Optimistically update to the new value
-            queryClient.setQueryData([
-                "admin-organization-models",
-                currentPage,
-                pageSize,
-                categoryFilter,
-                tierFilter,
-                searchQuery,
-                sortBy,
-                sortOrder
-            ], (old: any) => {
+            queryClient.setQueryData(["admin-combined-models"], (old: any) => {
                 if (!old?.data) return old;
                 
                 return {
@@ -111,29 +77,17 @@ export const AdminModelsPage = () => {
             });
 
             // Return a context object with the snapshotted value
-            return { previousModels };
+            return { previousData };
         },
         onSuccess: (_, { enabled }) => {
             toast({
                 title: "Success",
                 description: `Model ${enabled ? "enabled" : "disabled"} for your organization`,
             });
-            // Don't invalidate queries - we've already updated optimistically
-            // Only invalidate analytics since we don't update that optimistically
-            queryClient.invalidateQueries({ queryKey: ["admin-organization-analytics"] });
         },
         onError: (error, variables, context) => {
             // If the mutation fails, use the context returned from onMutate to roll back
-            queryClient.setQueryData([
-                "admin-organization-models",
-                currentPage,
-                pageSize,
-                categoryFilter,
-                tierFilter,
-                searchQuery,
-                sortBy,
-                sortOrder
-            ], context?.previousModels);
+            queryClient.setQueryData(["admin-combined-models"], context?.previousData);
             
             toast({
                 title: "Error",
@@ -143,7 +97,7 @@ export const AdminModelsPage = () => {
         },
         onSettled: () => {
             // Always refetch after error or success to ensure we have the latest data
-            queryClient.invalidateQueries({ queryKey: ["admin-organization-models"] });
+            queryClient.invalidateQueries({ queryKey: ["admin-combined-models"] });
         }
     });
 
@@ -156,7 +110,7 @@ export const AdminModelsPage = () => {
                 title: "Success",
                 description: "Model permanently removed from your department",
             });
-            queryClient.invalidateQueries({ queryKey: ["admin-organization-models"] });
+            queryClient.invalidateQueries({ queryKey: ["admin-combined-models"] });
             queryClient.invalidateQueries({ queryKey: ["admin-organization-analytics"] });
         },
         onError: (error) => {
@@ -168,10 +122,111 @@ export const AdminModelsPage = () => {
         }
     });
 
-    // Computed values
-    const models = modelsResponse?.data || [];
-    const pagination = modelsResponse?.pagination;
-    const analytics = modelsResponse?.analytics;
+    // Computed values with client-side filtering and sorting
+    const allModels = combinedModelsResponse?.data || [];
+    const combinedStatistics = combinedModelsResponse?.statistics;
+    const externalApisInfo = combinedModelsResponse?.external_apis;
+    
+    // Client-side filtering
+    const filteredModels = useMemo(() => {
+        let filtered = allModels;
+
+        // Filter by source type
+        if (!showExternalModels) {
+            filtered = filtered.filter(model => model.source_type !== 'external_api');
+        }
+
+        // Filter by search query
+        if (searchQuery) {
+            const query = searchQuery.toLowerCase();
+            filtered = filtered.filter(model =>
+                model.display_name.toLowerCase().includes(query) ||
+                model.name.toLowerCase().includes(query) ||
+                model.description.toLowerCase().includes(query) ||
+                model.provider.toLowerCase().includes(query)
+            );
+        }
+
+        // Filter by category
+        if (categoryFilter && categoryFilter !== "all") {
+            filtered = filtered.filter(model => model.category === categoryFilter);
+        }
+
+        // Filter by tier
+        if (tierFilter && tierFilter !== "all") {
+            filtered = filtered.filter(model => model.performance_tier === tierFilter);
+        }
+
+        return filtered;
+    }, [allModels, searchQuery, categoryFilter, tierFilter, showExternalModels]);
+
+    // Client-side sorting
+    const sortedModels = useMemo(() => {
+        const sorted = [...filteredModels];
+        
+        sorted.sort((a, b) => {
+            let aValue = a[sortBy as keyof AdminModel];
+            let bValue = b[sortBy as keyof AdminModel];
+            
+            // Handle special cases for sorting
+            if (sortBy === 'size') {
+                // Convert size to bytes for proper sorting
+                const parseSize = (size: string) => {
+                    const match = size.match(/(\d+(?:\.\d+)?)\s*(GB|MB|KB|B)/i);
+                    if (!match) return 0;
+                    const value = parseFloat(match[1]);
+                    const unit = match[2].toUpperCase();
+                    const multipliers = { B: 1, KB: 1024, MB: 1024 * 1024, GB: 1024 * 1024 * 1024 };
+                    return value * (multipliers[unit as keyof typeof multipliers] || 0);
+                };
+                aValue = parseSize(a.size);
+                bValue = parseSize(b.size);
+            }
+            
+            if (typeof aValue === 'string' && typeof bValue === 'string') {
+                aValue = aValue.toLowerCase();
+                bValue = bValue.toLowerCase();
+            }
+            
+            if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
+            if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
+            return 0;
+        });
+        
+        return sorted;
+    }, [filteredModels, sortBy, sortOrder]);
+
+    // Client-side pagination
+    const paginatedModels = useMemo(() => {
+        const startIndex = (currentPage - 1) * pageSize;
+        const endIndex = startIndex + pageSize;
+        return sortedModels.slice(startIndex, endIndex);
+    }, [sortedModels, currentPage, pageSize]);
+
+    // Mock pagination object for UI compatibility
+    const pagination = useMemo(() => ({
+        page: currentPage,
+        limit: pageSize,
+        total: sortedModels.length,
+        pages: Math.ceil(sortedModels.length / pageSize)
+    }), [currentPage, pageSize, sortedModels.length]);
+
+    // Create analytics from current filtered data
+    const analytics = useMemo(() => {
+        const categoryCount: Record<string, number> = {};
+        const tierCount: Record<string, number> = {};
+        
+        filteredModels.forEach(model => {
+            categoryCount[model.category] = (categoryCount[model.category] || 0) + 1;
+            tierCount[model.performance_tier] = (tierCount[model.performance_tier] || 0) + 1;
+        });
+        
+        return {
+            total_models: filteredModels.length,
+            models_by_category: categoryCount,
+            models_by_tier: tierCount
+        };
+    }, [filteredModels]);
 
     // Event handlers
     const handleModelClick = (model: AdminModel) => {
@@ -185,10 +240,31 @@ export const AdminModelsPage = () => {
     };
 
     const handleToggleModel = (modelId: string, enabled: boolean) => {
+        // Find the model to check if it's external
+        const model = allModels.find(m => m._id === modelId);
+        if (model?.source_type === 'external_api') {
+            toast({
+                title: "Cannot toggle external model",
+                description: "External API models cannot be toggled. They are managed through API configuration.",
+                variant: "destructive",
+            });
+            return;
+        }
         toggleModelMutation.mutate({ modelId, enabled });
     };
 
     const handleDeleteModel = (modelId: string) => {
+        // Find the model to check if it's external
+        const model = allModels.find(m => m._id === modelId);
+        if (model?.source_type === 'external_api') {
+            toast({
+                title: "Cannot delete external model",
+                description: "External API models cannot be deleted from here. Manage them through API configuration.",
+                variant: "destructive",
+            });
+            return;
+        }
+        
         // Show confirmation dialog
         if (window.confirm('Are you sure you want to permanently remove this model from your department? This action cannot be undone.')) {
             deleteModelMutation.mutate(modelId);
@@ -270,7 +346,7 @@ export const AdminModelsPage = () => {
 
             {/* KPI Cards */}
             <AdminKPICards 
-                models={models} 
+                models={filteredModels} 
                 analytics={analytics}
                 detailedAnalytics={analyticsData?.data}
             />
@@ -284,11 +360,13 @@ export const AdminModelsPage = () => {
                 tierFilter={tierFilter}
                 onTierChange={setTierFilter}
                 onRefresh={() => refetch()}
+                showExternalModels={showExternalModels}
+                onToggleExternalModels={setShowExternalModels}
             />
 
             {/* Models Table */}
             <AdminModelsTable
-                models={models}
+                models={paginatedModels}
                 isLoading={isLoading}
                 pagination={pagination}
                 onModelClick={handleModelClick}

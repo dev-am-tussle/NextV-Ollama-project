@@ -1,6 +1,8 @@
-import { Search, RefreshCw, Filter } from "lucide-react";
+import { Search, RefreshCw, Filter, Cloud } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
     Select,
     SelectContent,
@@ -17,6 +19,8 @@ interface AdminFiltersToolbarProps {
     tierFilter: string;
     onTierChange: (value: string) => void;
     onRefresh: () => void;
+    showExternalModels?: boolean;
+    onToggleExternalModels?: (show: boolean) => void;
 }
 
 export const AdminFiltersToolbar = ({
@@ -27,6 +31,8 @@ export const AdminFiltersToolbar = ({
     tierFilter,
     onTierChange,
     onRefresh,
+    showExternalModels = true,
+    onToggleExternalModels,
 }: AdminFiltersToolbarProps) => {
     const categories = [
         { value: "all", label: "All Categories" },
@@ -34,7 +40,8 @@ export const AdminFiltersToolbar = ({
         { value: "coding", label: "Coding" },
         { value: "creative", label: "Creative" },
         { value: "analytical", label: "Analytical" },
-        { value: "conversational", label: "Conversational" }
+        { value: "conversational", label: "Conversational" },
+        { value: "external", label: "External APIs" }
     ];
 
     const performanceTiers = [
@@ -56,6 +63,21 @@ export const AdminFiltersToolbar = ({
                     className="pl-9"
                 />
             </div>
+
+            {/* External Models Toggle */}
+            {onToggleExternalModels && (
+                <div className="flex items-center space-x-2 shrink-0">
+                    <Cloud className="h-4 w-4 text-muted-foreground" />
+                    <Label htmlFor="show-external" className="text-sm font-medium">
+                        External APIs
+                    </Label>
+                    <Switch
+                        id="show-external"
+                        checked={showExternalModels}
+                        onCheckedChange={onToggleExternalModels}
+                    />
+                </div>
+            )}
 
             {/* Category Filter */}
             <div className="min-w-[160px]">

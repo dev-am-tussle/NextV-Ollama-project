@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -34,7 +35,9 @@ import {
   Star,
   DollarSign,
   X,
-  CheckCircle
+  CheckCircle,
+  Search,
+  GitCompare
 } from "lucide-react";
 import { 
   getCategorizedModelsForUser, 
@@ -42,13 +45,16 @@ import {
   removeDownloadedModel,
   requestModelPurchase,
   updateModelUsage,
+  selectModel,
   type DownloadedModel,
   type AvailableToDownloadModel,
   type AvailableForPurchaseModel,
+  type AvailableApiModel,
   type DownloadProgress,
   type CategorizedModelsResponse
 } from "@/services/categorizedModels";
 import { useToast } from "@/hooks/use-toast";
+import { useCompareStore } from "@/stores/useCompareStore";
 
 interface CategorizedModelSelectorProps {
   selected: string;
@@ -379,37 +385,138 @@ const CategorizedModelSelector: React.FC<CategorizedModelSelectorProps> = ({
   onToggleCompare,
 }) => {
   const { toast } = useToast();
-  const [modelsData, setModelsData] = useState<CategorizedModelsResponse | null>(null);
+  const queryClient = useQueryClient();
+  
+  // Compare store
+  const isComparing = useCompareStore((state) => state.isComparing);
+  const toggleCompare = useCompareStore((state) => state.toggleCompare);
+  
   const [selectedModelDetail, setSelectedModelDetail] = useState<any>(null);
   const [selectedModelType, setSelectedModelType] = useState<'downloaded' | 'available' | 'purchase'>('downloaded');
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [downloadingModels, setDownloadingModels] = useState<Set<string>>(new Set());
   const [downloadProgress, setDownloadProgress] = useState<Map<string, DownloadProgress>>(new Map());
-  const [loading, setLoading] = useState(false);
+  
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Collapsible sections state
+  const [expandedSections, setExpandedSections] = useState({
+    downloaded: true,
+    availableApi: true,
+    availableToDownload: true,
+    availableGlobal: true,
+  });
 
-  // Fetch categorized models
+  // Toggle section visibility
+  const toggleSection = (section: keyof typeof expandedSections) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
+
+  // Fetch categorized models with React Query
+  const {
+    data: modelsData,
+    isLoading: loading,
+    isError,
+    refetch
+  } = useQuery<CategorizedModelsResponse>({
+    queryKey: ['categorized-models'],
+    queryFn: getCategorizedModelsForUser,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
+    refetchOnWindowFocus: false,
+    retry: 2,
+    throwOnError: false
+  });
+
+  // Handle errors
   useEffect(() => {
-    const fetchModels = async () => {
-      try {
-        setLoading(true);
-        const response = await getCategorizedModelsForUser();
-        if (response.success) {
-          setModelsData(response);
-        }
-      } catch (error) {
-        console.error('Failed to fetch categorized models:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load models. Please try again.",
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
-      }
+    if (isError) {
+      toast({
+        title: "Error",
+        description: "Failed to load models. Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [isError, toast]);
+
+  // Calculate dynamic height based on content
+  const calculateDropdownHeight = () => {
+    if (!modelsData) return 'w-80 max-h-96';
+    
+    const totalModels = 
+      (expandedSections.downloaded ? modelsData.data.downloaded.length : 0) +
+      (expandedSections.availableApi ? (modelsData.data.availableApi?.length || 0) : 0) +
+      (expandedSections.availableToDownload ? modelsData.data.availableToDownload.length : 0) +
+      (expandedSections.availableGlobal ? Math.min(modelsData.data.availableGlobal.length, 5) : 0);
+    
+    // Adaptive width and height based on content
+    let width = 'w-80'; // Default width
+    let height = 'max-h-96'; // Default height
+    
+    if (totalModels <= 3) {
+      width = 'w-80';
+      height = 'max-h-64';
+    } else if (totalModels <= 6) {
+      width = 'w-96';
+      height = 'max-h-80';
+    } else if (totalModels <= 10) {
+      width = 'w-96';
+      height = 'max-h-96';
+    } else if (totalModels <= 15) {
+      width = 'w-[28rem]';
+      height = 'max-h-[32rem]';
+    } else {
+      width = 'w-[32rem]';
+      height = 'max-h-[40rem]';
+    }
+    
+    return `${width} ${height}`;
+  };
+
+  // Filter models based on search query
+  const filterModels = (models: any[], searchQuery: string) => {
+    if (!searchQuery.trim()) return models;
+    
+    const query = searchQuery.toLowerCase();
+    return models.filter(model => 
+      model.name.toLowerCase().includes(query) ||
+      model.display_name.toLowerCase().includes(query) ||
+      model.description?.toLowerCase().includes(query) ||
+      model.provider?.toLowerCase().includes(query) ||
+      model.category?.toLowerCase().includes(query) ||
+      model.tags?.some((tag: string) => tag.toLowerCase().includes(query))
+    );
+  };
+
+  // Get filtered models for each category
+  const getFilteredModels = () => {
+    if (!modelsData) return {
+      downloaded: [],
+      availableApi: [],
+      availableToDownload: [],
+      availableGlobal: []
     };
 
-    fetchModels();
-  }, [toast]);
+    return {
+      downloaded: filterModels(modelsData.data.downloaded, searchQuery),
+      availableApi: filterModels(modelsData.data.availableApi || [], searchQuery),
+      availableToDownload: filterModels(modelsData.data.availableToDownload, searchQuery),
+      availableGlobal: filterModels(modelsData.data.availableGlobal, searchQuery)
+    };
+  };
+
+  const filteredModels = getFilteredModels();
+
+  // Function to trigger real-time updates
+  const triggerModelsUpdate = async () => {
+    console.log('🔄 Triggering models update...');
+    await queryClient.invalidateQueries({ queryKey: ['categorized-models'] });
+    console.log('✅ Models query invalidated');
+  };
 
   // Get currently selected model details
   const getSelectedModelDetails = () => {
@@ -418,8 +525,9 @@ const CategorizedModelSelector: React.FC<CategorizedModelSelectorProps> = ({
     // Look for selected model in all categories
     const allModels = [
       ...modelsData.data.downloaded,
-        ...modelsData.data.availableToDownload,
-      ...modelsData.data.availableGlobal
+      ...modelsData.data.availableToDownload,
+      ...modelsData.data.availableGlobal,
+      ...(modelsData.data.availableApi || []) // Add API models
     ];
     
     return allModels.find(model => model.name === selected) || 
@@ -463,14 +571,9 @@ const CategorizedModelSelector: React.FC<CategorizedModelSelectorProps> = ({
           });
         },
         onComplete: async (result) => {
-          if (result.success) {
-            // Refresh models data
-            const response = await getCategorizedModelsForUser();
-            if (response.success) {
-              setModelsData(response);
-            }
-            
-            toast({
+        if (result.success) {
+          // Refresh models data
+          await triggerModelsUpdate();            toast({
               title: "Download Complete",
               description: `Successfully downloaded ${modelName}`,
             });
@@ -514,10 +617,7 @@ const CategorizedModelSelector: React.FC<CategorizedModelSelectorProps> = ({
       const response = await removeDownloadedModel(modelName);
       if (response.success) {
         // Refresh models data
-        const newData = await getCategorizedModelsForUser();
-        if (newData.success) {
-          setModelsData(newData);
-        }
+        await triggerModelsUpdate();
         
         toast({
           title: "Model Removed",
@@ -554,12 +654,43 @@ const CategorizedModelSelector: React.FC<CategorizedModelSelectorProps> = ({
   };
 
   const handleModelSelect = async (modelName: string) => {
-    onSelect(modelName);
-    // Update usage statistics
     try {
-      await updateModelUsage(modelName);
+      // Call backend to handle model selection (traditional or API)
+      const selectionResult = await selectModel(modelName);
+      
+      if (selectionResult.success) {
+        console.log('Model selection result:', selectionResult);
+        
+        // Store routing info for chat service
+        if (selectionResult.model_type === 'external_api') {
+          localStorage.setItem('selectedModelRouting', JSON.stringify({
+            type: 'external_api',
+            provider: selectionResult.routing_info.provider,
+            model_id: selectionResult.routing_info.model_id,
+            api_source: selectionResult.routing_info.api_source,
+            api_name: selectionResult.routing_info.api_name
+          }));
+        } else {
+          localStorage.setItem('selectedModelRouting', JSON.stringify({
+            type: 'traditional',
+            model_name: selectionResult.routing_info.model_name,
+            local: true
+          }));
+        }
+        
+        // Call parent onSelect
+        onSelect(modelName);
+        
+        // Update usage statistics
+        await updateModelUsage(modelName);
+      }
     } catch (error) {
-      console.warn('Failed to update model usage:', error);
+      console.error('Failed to select model:', error);
+      toast({
+        title: "Selection Failed",
+        description: "Failed to select model. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -583,142 +714,263 @@ const CategorizedModelSelector: React.FC<CategorizedModelSelectorProps> = ({
 
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex items-center gap-2 pr-2"
-          >
-            {selectedModelDetails ? (
-              <>
-                {getCategoryIcon(selectedModelDetails.category)}
-                <span className="font-medium">{selectedModelDetails.display_name}</span>
-              </>
-            ) : (
-              <>
-                <Wind className="h-4 w-4" />
-                <span className="font-medium">Select Model</span>
-              </>
-            )}
-            <ChevronDown className="h-4 w-4 opacity-70" />
-          </Button>
-        </DropdownMenuTrigger>
+      <div className="flex items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2 pr-2"
+            >
+              {selectedModelDetails ? (
+                <>
+                  {getCategoryIcon(selectedModelDetails.category)}
+                  <span className="font-medium">{selectedModelDetails.display_name}</span>
+                </>
+              ) : (
+                <>
+                  <Wind className="h-4 w-4" />
+                  <span className="font-medium">Select Model</span>
+                </>
+              )}
+              <ChevronDown className="h-4 w-4 opacity-70" />
+            </Button>
+          </DropdownMenuTrigger>
         <DropdownMenuContent
           align="start"
-          className="w-80 bg-popover border border-border p-2"
+          className={`${calculateDropdownHeight()} bg-popover border border-border p-2 overflow-y-auto`}
         >
           {/* Organization Info */}
           <div className="px-2 py-2 text-xs text-muted-foreground border-b mb-2">
             Organization: <span className="font-medium">{modelsData.user.organization?.name || 'No Organization'}</span>
           </div>
 
-          {/* Downloaded Models Section */}
-          {modelsData.data.downloaded.length > 0 && (
-            <>
-              <div className="px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Downloaded Models ({modelsData.data.downloaded.length})
-              </div>
-              {modelsData.data.downloaded.map((model) => (
-                <DropdownMenuItem
-                  key={model._id}
-                  onClick={() => handleModelSelect(model.name)}
-                  className={`flex items-center justify-between p-3 cursor-pointer ${
-                    selected === model.name ? 'bg-accent' : ''
-                  }`}
+          {/* Search Input */}
+          <div className="px-2 pb-2 mb-2 border-b">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search models..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-8 pr-8 py-2 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                onClick={(e) => e.stopPropagation()}
+              />
+              {searchQuery && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSearchQuery('');
+                  }}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  <div className="flex items-center gap-3">
-                    {getCategoryIcon(model.category)}
-                    <div>
-                      <p className="font-medium">{model.display_name}</p>
-                      <p className="text-xs text-muted-foreground">{model.size}</p>
-                    </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleModelClick(model, 'downloaded');
-                    }}
-                    className="h-6 w-6 p-0"
-                  >
-                    <Info className="h-3 w-3" />
-                  </Button>
-                </DropdownMenuItem>
-              ))}
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* No Results Message */}
+          {searchQuery && 
+           filteredModels.downloaded.length === 0 && 
+           filteredModels.availableApi.length === 0 && 
+           filteredModels.availableToDownload.length === 0 && 
+           filteredModels.availableGlobal.length === 0 && (
+            <div className="px-4 py-8 text-center text-muted-foreground">
+              <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm font-medium">No models found</p>
+              <p className="text-xs">Try adjusting your search query</p>
+            </div>
+          )}
+
+          {/* Downloaded Models Section */}
+          {filteredModels.downloaded.length > 0 && (
+            <>
+              <div 
+                className="flex items-center justify-between px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer hover:bg-accent rounded"
+                onClick={() => toggleSection('downloaded')}
+              >
+                <span>Downloaded Models ({filteredModels.downloaded.length})</span>
+                <ChevronDown className={`h-3 w-3 transition-transform ${expandedSections.downloaded ? '' : '-rotate-90'}`} />
+              </div>
+              {expandedSections.downloaded && (
+                <div className="max-h-48 overflow-y-auto">
+                  {filteredModels.downloaded.map((model) => (
+                    <DropdownMenuItem
+                      key={model._id}
+                      onClick={() => handleModelSelect(model.name)}
+                      className={`flex items-center justify-between p-3 cursor-pointer ${
+                        selected === model.name ? 'bg-accent' : ''
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        {getCategoryIcon(model.category)}
+                        <div>
+                          <p className="font-medium">{model.display_name}</p>
+                          <p className="text-xs text-muted-foreground">{model.size}</p>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleModelClick(model, 'downloaded');
+                        }}
+                        className="h-6 w-6 p-0"
+                      >
+                        <Info className="h-3 w-3" />
+                      </Button>
+                    </DropdownMenuItem>
+                  ))}
+                </div>
+              )}
+              <Separator className="my-2" />
+            </>
+          )}
+
+          {/* Available API Models Section */}
+          {filteredModels.availableApi.length > 0 && (
+            <>
+              <div 
+                className="flex items-center justify-between px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer hover:bg-accent rounded"
+                onClick={() => toggleSection('availableApi')}
+              >
+                <span>Available API Models ({filteredModels.availableApi.length})</span>
+                <ChevronDown className={`h-3 w-3 transition-transform ${expandedSections.availableApi ? '' : '-rotate-90'}`} />
+              </div>
+              {expandedSections.availableApi && (
+                <div className="max-h-48 overflow-y-auto">
+                  {filteredModels.availableApi.map((model) => (
+                    <DropdownMenuItem
+                      key={model._id}
+                      onClick={() => handleModelSelect(model.name)}
+                      className="flex items-center justify-between p-3 cursor-pointer hover:bg-accent"
+                    >
+                      <div className="flex items-center gap-3">
+                        {getCategoryIcon(model.category)}
+                        <div>
+                          <p className="font-medium">{model.display_name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {model.provider} • {model.external_source.type === 'admin' ? 'Admin' : 'Personal'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge className={`${getPerformanceTierColor(model.performance_tier)} text-xs`}>
+                          {model.performance_tier}
+                        </Badge>
+                        <div className="flex items-center text-xs text-green-600">
+                          <div className="w-2 h-2 bg-green-500 rounded-full mr-1"></div>
+                          API
+                        </div>
+                      </div>
+                    </DropdownMenuItem>
+                  ))}
+                </div>
+              )}
               <Separator className="my-2" />
             </>
           )}
 
           {/* Available to Download Section */}
-          {modelsData.data.availableToDownload.length > 0 && (
+          {filteredModels.availableToDownload.length > 0 && (
             <>
-              <div className="px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Available to Download ({modelsData.data.availableToDownload.length})
+              <div 
+                className="flex items-center justify-between px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer hover:bg-accent rounded"
+                onClick={() => toggleSection('availableToDownload')}
+              >
+                <span>Available to Download ({filteredModels.availableToDownload.length})</span>
+                <ChevronDown className={`h-3 w-3 transition-transform ${expandedSections.availableToDownload ? '' : '-rotate-90'}`} />
               </div>
-              {modelsData.data.availableToDownload.map((model) => (
-                <DropdownMenuItem
-                  key={model._id}
-                  onClick={() => handleModelClick(model, 'available')}
-                  className="flex items-center justify-between p-3 cursor-pointer opacity-75 hover:opacity-100"
-                >
-                  <div className="flex items-center gap-3">
-                    {getCategoryIcon(model.category)}
-                    <div>
-                      <p className="font-medium">{model.display_name}</p>
-                      <p className="text-xs text-muted-foreground">{model.size}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge className={`${getPerformanceTierColor(model.performance_tier)} text-xs`}>
-                      {model.performance_tier}
-                    </Badge>
-                    <Download className="h-3 w-3 text-muted-foreground" />
-                  </div>
-                </DropdownMenuItem>
-              ))}
+              {expandedSections.availableToDownload && (
+                <div className="max-h-48 overflow-y-auto">
+                  {filteredModels.availableToDownload.map((model) => (
+                    <DropdownMenuItem
+                      key={model._id}
+                      onClick={() => handleModelClick(model, 'available')}
+                      className="flex items-center justify-between p-3 cursor-pointer opacity-75 hover:opacity-100"
+                    >
+                      <div className="flex items-center gap-3">
+                        {getCategoryIcon(model.category)}
+                        <div>
+                          <p className="font-medium">{model.display_name}</p>
+                          <p className="text-xs text-muted-foreground">{model.size}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge className={`${getPerformanceTierColor(model.performance_tier)} text-xs`}>
+                          {model.performance_tier}
+                        </Badge>
+                        <Download className="h-3 w-3 text-muted-foreground" />
+                      </div>
+                    </DropdownMenuItem>
+                  ))}
+                </div>
+              )}
               <Separator className="my-2" />
             </>
           )}
 
           {/* Available for Purchase Section */}
-          {modelsData.data.availableGlobal.length > 0 && (
+          {filteredModels.availableGlobal.length > 0 && (
             <>
-              <div className="px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Available (Global) ({modelsData.data.availableGlobal.length})
+              <div 
+                className="flex items-center justify-between px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer hover:bg-accent rounded"
+                onClick={() => toggleSection('availableGlobal')}
+              >
+                <span>Available (Global) ({filteredModels.availableGlobal.length})</span>
+                <ChevronDown className={`h-3 w-3 transition-transform ${expandedSections.availableGlobal ? '' : '-rotate-90'}`} />
               </div>
-              {modelsData.data.availableGlobal.slice(0, 5).map((model) => (
-                <DropdownMenuItem
-                  key={model._id}
-                  onClick={() => handleModelClick(model, 'purchase')}
-                  className="flex items-center justify-between p-3 cursor-pointer opacity-60 hover:opacity-100"
-                >
-                  <div className="flex items-center gap-3">
-                    {getCategoryIcon(model.category)}
-                    <div>
-                      <p className="font-medium">{model.display_name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {model.pricing?.monthly ? `From ${formatPrice(model.pricing.monthly)}/mo` : model.size}
-                      </p>
+              {expandedSections.availableGlobal && (
+                <div className="max-h-48 overflow-y-auto">
+                  {filteredModels.availableGlobal.slice(0, 5).map((model) => (
+                    <DropdownMenuItem
+                      key={model._id}
+                      onClick={() => handleModelClick(model, 'purchase')}
+                      className="flex items-center justify-between p-3 cursor-pointer opacity-60 hover:opacity-100"
+                    >
+                      <div className="flex items-center gap-3">
+                        {getCategoryIcon(model.category)}
+                        <div>
+                          <p className="font-medium">{model.display_name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {model.pricing?.monthly ? `From ${formatPrice(model.pricing.monthly)}/mo` : model.size}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {model.popular && <Star className="h-3 w-3 text-amber-500" />}
+                        {model.recommended && <Badge variant="secondary" className="text-xs">Rec</Badge>}
+                        <Download className="h-3 w-3 text-muted-foreground" />
+                      </div>
+                    </DropdownMenuItem>
+                  ))}
+                  {filteredModels.availableGlobal.length > 5 && (
+                    <div className="px-3 py-2 text-xs text-muted-foreground border-t">
+                      +{filteredModels.availableGlobal.length - 5} more models available
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {model.popular && <Star className="h-3 w-3 text-amber-500" />}
-                    {model.recommended && <Badge variant="secondary" className="text-xs">Rec</Badge>}
-                    <Download className="h-3 w-3 text-muted-foreground" />
-                  </div>
-                </DropdownMenuItem>
-              ))}
-              {modelsData.data.availableGlobal.length > 5 && (
-                <div className="px-3 py-2 text-xs text-muted-foreground border-t">
-                  +{modelsData.data.availableGlobal.length - 5} more models available
+                  )}
                 </div>
               )}
             </>
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+      
+      {/* Compare Toggle Button */}
+      <Button
+        variant={isComparing ? "default" : "outline"}
+        size="sm"
+        onClick={toggleCompare}
+        className="flex items-center gap-2"
+        title="Compare multiple models side-by-side"
+      >
+        <GitCompare className="h-4 w-4" />
+        <span className="hidden sm:inline">Compare</span>
+      </Button>
+      </div>
 
       {/* Model Detail Side Panel */}
       <Sheet open={isDetailOpen} onOpenChange={setIsDetailOpen}>

@@ -1,30 +1,41 @@
 import { useState, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiKeysService, ExternalApi } from '../services/apiKeys.service';
 import { useToast } from './use-toast';
 
 export function useApiKeys() {
-  const [apiKeys, setApiKeys] = useState<ExternalApi[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  // Fetch all API keys
-  const fetchApiKeys = useCallback(async () => {
-    setIsLoading(true);
-    try {
+  // Fetch all API keys with React Query
+  const {
+    data: apiKeys = [],
+    isLoading: isQueryLoading,
+    refetch: fetchApiKeys
+  } = useQuery<ExternalApi[]>({
+    queryKey: ['user-api-keys'],
+    queryFn: async () => {
       const response = await apiKeysService.getAllApiKeys();
       if (response.success && Array.isArray(response.data)) {
-        setApiKeys(response.data);
+        return response.data;
       }
-    } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error.message,
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [toast]);
+      throw new Error('Failed to fetch API keys');
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
+    refetchOnWindowFocus: false,
+    retry: 2
+  });
+
+  // Function to invalidate related queries (including model lists)
+  const invalidateRelatedQueries = useCallback(async () => {
+    console.log('🔄 Invalidating related queries after API key change...');
+    await queryClient.invalidateQueries({ queryKey: ['user-api-keys'] });
+    await queryClient.invalidateQueries({ queryKey: ['categorized-models'] });
+    await queryClient.invalidateQueries({ queryKey: ['available-models'] });
+    console.log('✅ Related queries invalidated');
+  }, [queryClient]);
 
   // Add new API key
   const addApiKey = useCallback(async (data: { name: string; provider: string; api_key: string; models?: any[]; modelCount?: number; selectedModels?: any[] }) => {
@@ -36,7 +47,7 @@ export function useApiKeys() {
           title: 'Success',
           description: 'API key added successfully',
         });
-        await fetchApiKeys(); // Refresh the list
+        await invalidateRelatedQueries(); // Trigger real-time updates
       }
       return response;
     } catch (error: any) {
@@ -49,7 +60,7 @@ export function useApiKeys() {
     } finally {
       setIsLoading(false);
     }
-  }, [fetchApiKeys, toast]);
+  }, [invalidateRelatedQueries, toast]);
 
   // Save API key (alias for addApiKey)
   const saveApiKey = useCallback(async (data: { name: string; provider: string; api_key: string; models?: any[]; modelCount?: number; selectedModels?: any[] }) => {
@@ -66,7 +77,7 @@ export function useApiKeys() {
           title: 'Success',
           description: 'API key updated successfully',
         });
-        await fetchApiKeys(); // Refresh the list
+        await invalidateRelatedQueries(); // Trigger real-time updates
       }
       return response;
     } catch (error: any) {
@@ -79,7 +90,7 @@ export function useApiKeys() {
     } finally {
       setIsLoading(false);
     }
-  }, [fetchApiKeys, toast]);
+  }, [invalidateRelatedQueries, toast]);
 
   // Delete API key
   const deleteApiKey = useCallback(async (apiId: string) => {
@@ -91,7 +102,7 @@ export function useApiKeys() {
           title: 'Success',
           description: 'API key deleted successfully',
         });
-        await fetchApiKeys(); // Refresh the list
+        await invalidateRelatedQueries(); // Trigger real-time updates
       }
       return response;
     } catch (error: any) {
@@ -104,7 +115,7 @@ export function useApiKeys() {
     } finally {
       setIsLoading(false);
     }
-  }, [fetchApiKeys, toast]);
+  }, [invalidateRelatedQueries, toast]);
 
   // Toggle API key status
   const toggleApiStatus = useCallback(async (apiId: string, isActive: boolean) => {
@@ -116,7 +127,7 @@ export function useApiKeys() {
           title: 'Success',
           description: `API key ${isActive ? 'activated' : 'deactivated'} successfully`,
         });
-        await fetchApiKeys(); // Refresh the list
+        await invalidateRelatedQueries(); // Trigger real-time updates
       }
       return response;
     } catch (error: any) {
@@ -158,7 +169,7 @@ export function useApiKeys() {
 
   return {
     apiKeys,
-    isLoading,
+    isLoading: isLoading || isQueryLoading,
     fetchApiKeys,
     addApiKey,
     saveApiKey,
@@ -166,5 +177,6 @@ export function useApiKeys() {
     deleteApiKey,
     toggleApiStatus,
     verifyApiKey,
+    invalidateRelatedQueries, // Add this for manual triggers
   };
 }

@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { adminApiKeysService, AdminExternalApi } from '../services/adminApiKeys.service';
 import { useToast } from './use-toast';
 
@@ -6,7 +7,21 @@ export function useAdminApiKeys() {
   const [adminApiKeys, setAdminApiKeys] = useState<AdminExternalApi[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
+  // Helper function to invalidate related queries for real-time updates
+  const invalidateRelatedQueries = useCallback(async () => {
+    console.log('🔄 Invalidating related queries after admin API change...');
+    // Invalidate combined models query for real-time dashboard updates
+    await queryClient.invalidateQueries({ queryKey: ["admin-combined-models"] });
+    // Invalidate organization analytics
+    await queryClient.invalidateQueries({ queryKey: ["admin-organization-analytics"] });
+    // Invalidate user queries for real-time updates (admin changes affect users)
+    await queryClient.invalidateQueries({ queryKey: ['categorized-models'] });
+    await queryClient.invalidateQueries({ queryKey: ['available-models'] });
+    await queryClient.invalidateQueries({ queryKey: ['user-models'] });
+    console.log('✅ Related queries invalidated (admin + user)');
+  }, [queryClient]);
   // Fetch all admin API keys
   const fetchAdminApiKeys = useCallback(async () => {
     setIsLoading(true);
@@ -77,6 +92,7 @@ export function useAdminApiKeys() {
           description: 'Admin API key saved successfully',
         });
         await fetchAdminApiKeys(); // Refresh the list
+        await invalidateRelatedQueries(); // Real-time dashboard update
       }
       return response;
     } catch (error: any) {
@@ -90,7 +106,7 @@ export function useAdminApiKeys() {
     } finally {
       setIsLoading(false);
     }
-  }, [fetchAdminApiKeys, toast]);
+  }, [fetchAdminApiKeys, invalidateRelatedQueries, toast]);
 
   // Toggle admin API key status
   const toggleAdminApiStatus = useCallback(async (apiId: string, isActive: boolean) => {
@@ -103,6 +119,7 @@ export function useAdminApiKeys() {
           description: `Admin API key ${isActive ? 'activated' : 'deactivated'} successfully`,
         });
         await fetchAdminApiKeys(); // Refresh the list
+        await invalidateRelatedQueries(); // Real-time dashboard update
       }
       return response;
     } catch (error: any) {
@@ -115,7 +132,7 @@ export function useAdminApiKeys() {
     } finally {
       setIsLoading(false);
     }
-  }, [fetchAdminApiKeys, toast]);
+  }, [fetchAdminApiKeys, invalidateRelatedQueries, toast]);
 
   // Delete admin API key
   const deleteAdminApiKey = useCallback(async (apiId: string) => {
@@ -128,6 +145,7 @@ export function useAdminApiKeys() {
           description: 'Admin API key deleted successfully',
         });
         await fetchAdminApiKeys(); // Refresh the list
+        await invalidateRelatedQueries(); // Real-time dashboard update
       }
       return response;
     } catch (error: any) {
@@ -140,7 +158,7 @@ export function useAdminApiKeys() {
     } finally {
       setIsLoading(false);
     }
-  }, [fetchAdminApiKeys, toast]);
+  }, [fetchAdminApiKeys, invalidateRelatedQueries, toast]);
 
   return {
     adminApiKeys,

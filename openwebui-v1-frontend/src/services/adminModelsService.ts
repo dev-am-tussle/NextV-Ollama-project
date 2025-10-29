@@ -7,7 +7,7 @@ export interface AdminModel {
     display_name: string;
     description: string;
     size: string;
-    category: "general" | "coding" | "creative" | "analytical" | "conversational";
+    category: "general" | "coding" | "creative" | "analytical" | "conversational" | "external";
     tags: string[];
     is_active: boolean;
     org_enabled: boolean; // Organization-specific enabled status
@@ -21,6 +21,15 @@ export interface AdminModel {
     updated_at: string;
     pulled_by_users: number;
     set_as_default_by_users: number;
+    // External API specific fields
+    external_source?: {
+        api_name: string;
+        api_id: string;
+        provider: string;
+        model_id: string;
+        context_length?: number;
+    };
+    source_type?: "organization" | "external_api";
 }
 
 export interface AdminModelAnalytics {
@@ -85,6 +94,50 @@ export interface DeleteModelResponse {
         organization_id: string;
         removed: boolean;
     };
+}
+
+export interface CombinedModelsData {
+    models: {
+        organization: AdminModel[];
+        external_apis: AdminModel[];
+        combined: AdminModel[];
+    };
+    statistics: {
+        total_models: number;
+        organization_models: number;
+        external_models: number;
+        models_by_tier: Record<string, number>;
+        models_by_category: Record<string, number>;
+    };
+    external_apis: {
+        active_count: number;
+        total_count: number;
+        apis: Array<{
+            id: string;
+            name: string;
+            provider: string;
+            models_count: number;
+            last_validated: string;
+            is_active: boolean;
+        }>;
+    };
+    admin_info: {
+        id: string;
+        name: string;
+        email: string;
+        organization: {
+            id: string;
+            name: string;
+            allowed_models_count: number;
+        };
+    };
+}
+
+export interface CombinedModelsResponse {
+    success: boolean;
+    message: string;
+    data: CombinedModelsData;
+    timestamp: string;
 }
 
 class AdminModelsService {
@@ -161,6 +214,102 @@ class AdminModelsService {
         return this.makeRequest<DetailedAnalyticsResponse>(
             "/api/admin/models/organization/analytics"
         );
+    }
+
+    /**
+     * Get combined models (organization + external APIs) for admin dashboard
+     */
+    async getCombinedModels(): Promise<CombinedModelsResponse> {
+        return this.makeRequest<CombinedModelsResponse>(
+            "/api/admin/models/combined"
+        );
+    }
+
+    /**
+     * Transform external API models to AdminModel format for UI compatibility
+     */
+    private transformExternalApiModelsToAdminModels(externalModels: any[]): AdminModel[] {
+        return externalModels.map(model => ({
+            _id: model._id || `external_${model.external_source?.api_id}_${model.external_source?.model_id}`,
+            name: model.name || model.display_name,
+            display_name: model.display_name || model.name,
+            description: model.description || `External model from ${model.provider}`,
+            size: model.size || 'Unknown',
+            category: model.category === 'external' ? 'general' : (model.category as any) || 'general',
+            tags: model.tags || ['external', model.provider],
+            is_active: true,
+            org_enabled: true, // External models are considered enabled if they're in the response
+            provider: model.provider || 'external',
+            model_family: model.model_family || 'external',
+            parameters: model.parameters || model.external_source?.context_length?.toString() || 'Unknown',
+            use_cases: model.use_cases || ['general'],
+            performance_tier: model.performance_tier || 'balanced',
+            min_ram_gb: model.min_ram_gb || 4,
+            created_at: new Date().toISOString(), // Default for external models
+            updated_at: new Date().toISOString(), // Default for external models
+            pulled_by_users: 0, // External models don't have pull stats
+            set_as_default_by_users: 0, // External models don't have default stats
+            external_source: model.external_source,
+            source_type: 'external_api' as const
+        }));
+    }
+
+    /**
+     * Get combined models with proper data transformation for UI
+     */
+    async getCombinedModelsForUI(): Promise<{
+        success: boolean;
+        data: AdminModel[];
+        statistics: CombinedModelsData['statistics'];
+        external_apis: CombinedModelsData['external_apis'];
+        pagination?: AdminModelsPagination;
+        analytics?: AdminModelAnalytics;
+    }> {
+        try {
+            const response = await this.getCombinedModels();
+            
+            if (!response.success) {
+                throw new Error(response.message || 'Failed to fetch combined models');
+            }
+
+            const { models, statistics, external_apis } = response.data;
+            
+            // Transform external API models to match AdminModel interface
+            const transformedExternalModels = this.transformExternalApiModelsToAdminModels(models.external_apis);
+            
+            // Combine organization and external models
+            const combinedModels = [
+                ...models.organization.map(model => ({ ...model, source_type: 'organization' as const })),
+                ...transformedExternalModels
+            ];
+
+            // Create mock pagination for compatibility
+            const mockPagination: AdminModelsPagination = {
+                page: 1,
+                limit: combinedModels.length,
+                total: combinedModels.length,
+                pages: 1
+            };
+
+            // Transform statistics to match existing analytics format
+            const mockAnalytics: AdminModelAnalytics = {
+                total_models: statistics.total_models,
+                models_by_category: statistics.models_by_category,
+                models_by_tier: statistics.models_by_tier
+            };
+
+            return {
+                success: true,
+                data: combinedModels,
+                statistics,
+                external_apis,
+                pagination: mockPagination,
+                analytics: mockAnalytics
+            };
+        } catch (error) {
+            console.error('Error fetching combined models:', error);
+            throw error;
+        }
     }
 }
 

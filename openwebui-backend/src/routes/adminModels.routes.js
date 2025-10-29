@@ -1,6 +1,7 @@
 import express from "express";
 import { requireAuth } from "../middleware/auth.js";
 import * as adminModelsController from "../controllers/adminModels.controller.js";
+import * as adminCombinedModelsController from "../controllers/adminCombinedModels.controller.js";
 
 const router = express.Router();
 
@@ -18,6 +19,20 @@ router.put("/:id", adminModelsController.updateModel);
 
 // DELETE /api/admin/models/:id - Admin removes model
 router.delete("/:id", adminModelsController.deleteModel);
+
+// =========================
+// ADMIN COMBINED MODELS (NEW)
+// =========================
+
+// GET /api/admin/models/combined - Get organization + external API models combined
+router.get("/combined", adminCombinedModelsController.getAdminCombinedModels);
+
+// GET /api/admin/models/statistics - Get detailed statistics for admin dashboard
+router.get("/statistics", adminCombinedModelsController.getAdminModelsStatistics);
+
+// =========================
+// EXISTING ROUTES
+// =========================
 
 // Admin fetches categorized model list for a given user
 router.get("/admin/:id/models-list", adminModelsController.getAdminModelsList);

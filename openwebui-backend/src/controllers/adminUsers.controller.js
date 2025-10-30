@@ -11,8 +11,20 @@ export async function getAllUsers(req, res) {
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
+    // Build query filter based on admin type
+    const query = {};
+    
+    // If admin has organization_id, filter users by that organization
+    // Super Admins don't have organization_id, so they see all users
+    if (req.user && req.user.organization_id) {
+      query.organization_id = req.user.organization_id;
+      console.log(`🔒 Admin filtering users by organization: ${req.user.organization_id}`);
+    } else {
+      console.log('🌐 Super Admin - fetching all users');
+    }
+
     // Fetch users with their settings
-    const users = await User.find({})
+    const users = await User.find(query)
       .select('-password_hash') // Exclude password hash for security
       .sort({ created_at: -1 })
       .skip(skip)
@@ -58,8 +70,8 @@ export async function getAllUsers(req, res) {
       })
     );
 
-    // Get total count for pagination
-    const total = await User.countDocuments({});
+    // Get total count for pagination (with same filter)
+    const total = await User.countDocuments(query);
     const totalPages = Math.ceil(total / limit);
 
     res.json({
@@ -237,28 +249,50 @@ export async function deleteUser(req, res) {
 // GET /api/admin/users/stats - Get overall user statistics
 export async function getUsersStats(req, res) {
   try {
+    // Build query filter based on admin type
+    const baseQuery = {};
+    if (req.user && req.user.organization_id) {
+      baseQuery.organization_id = req.user.organization_id;
+      console.log(`🔒 Admin filtering stats by organization: ${req.user.organization_id}`);
+    }
+
     const [
       totalUsers,
       verifiedUsers,
       usersWithOAuth,
       recentUsers
     ] = await Promise.all([
-      User.countDocuments({}),
-      User.countDocuments({ email_verified: true }),
-      User.countDocuments({ "auth_providers.0": { $exists: true } }),
+      User.countDocuments(baseQuery),
+      User.countDocuments({ ...baseQuery, email_verified: true }),
+      User.countDocuments({ ...baseQuery, "auth_providers.0": { $exists: true } }),
       User.countDocuments({ 
+        ...baseQuery,
         created_at: { 
           $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) 
         } 
       })
     ]);
 
-    // Get total conversations, prompts, files across all users
-    const [totalConversations, totalPrompts, totalFiles] = await Promise.all([
-      Conversation.countDocuments({}),
-      SavedPrompt.countDocuments({}),
-      FileMeta.countDocuments({})
-    ]);
+    // Get total conversations, prompts, files for organization users
+    let totalConversations, totalPrompts, totalFiles;
+    
+    if (req.user && req.user.organization_id) {
+      // For org admins, count content only for their organization's users
+      const orgUserIds = await User.find(baseQuery).distinct('_id');
+      
+      [totalConversations, totalPrompts, totalFiles] = await Promise.all([
+        Conversation.countDocuments({ user_id: { $in: orgUserIds } }),
+        SavedPrompt.countDocuments({ user_id: { $in: orgUserIds } }),
+        FileMeta.countDocuments({ user_id: { $in: orgUserIds } })
+      ]);
+    } else {
+      // For super admins, count all content
+      [totalConversations, totalPrompts, totalFiles] = await Promise.all([
+        Conversation.countDocuments({}),
+        SavedPrompt.countDocuments({}),
+        FileMeta.countDocuments({})
+      ]);
+    }
 
     res.json({
       success: true,

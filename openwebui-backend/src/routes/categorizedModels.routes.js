@@ -18,11 +18,18 @@ const router = express.Router();
 router.get("/categorized-models", authenticateToken, getCategorizedModelsForUser);
 
 /**
- * @route   POST /api/user/download-model/:modelName
+ * @route   POST /api/v1/user/download-model/:modelName
  * @desc    Download a model with progress tracking (Server-Sent Events)
  * @access  Private
  */
 router.post("/download-model/:modelName", authenticateToken, downloadModelWithProgress);
+
+/**
+ * @route   POST /api/v1/user/download-model-stream/:modelName
+ * @desc    Alternative endpoint name for download with SSE
+ * @access  Private
+ */
+router.post("/download-model-stream/:modelName", authenticateToken, downloadModelWithProgress);
 
 /**
  * @route   DELETE /api/user/downloaded-model/:modelName

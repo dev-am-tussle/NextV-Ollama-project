@@ -526,21 +526,17 @@ export const AdminSettingsPage: React.FC = () => {
         </Tabs>
 
         {/* External API Manager Dialog */}
-        {showApiManager && (
-          <AdminExternalApiManager
-            open={showApiManager}
-            onClose={() => {
-              setShowApiManager(false);
+        <AdminExternalApiManager
+          open={showApiManager}
+          onOpenChange={(open) => {
+            setShowApiManager(open);
+            if (!open) {
               setEditingApi(null);
-            }}
-            onSuccess={() => {
-              setShowApiManager(false);
-              setEditingApi(null);
+              // Reload settings when dialog closes to get latest data
               loadSettings();
-            }}
-            editingApi={editingApi}
-          />
-        )}
+            }
+          }}
+        />
       </div>
     </AdminApiErrorBoundary>
   );

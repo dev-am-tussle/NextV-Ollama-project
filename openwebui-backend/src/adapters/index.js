@@ -1,3 +1,12 @@
+/**
+ * ========================================
+ * CENTRALIZED ADAPTERS REGISTRY
+ * ========================================
+ * 
+ * All external AI provider adapters in one place
+ * Supports: OpenAI, Anthropic, Groq, DeepSeek, Perplexity, Together, Mistral, Gemini
+ */
+
 import openaiAdapter from './openaiAdapter.js';
 import anthropicAdapter from './anthropicAdapter.js';
 import groqAdapter from './groqAdapter.js';
@@ -7,9 +16,9 @@ import togetherAdapter from './togetherAdapter.js';
 import mistralAdapter from './mistralAdapter.js';
 import geminiAdapter from './geminiAdapter.js';
 
-/**
- * Registry of all available provider adapters
- */
+// ========================================
+// ADAPTER REGISTRY
+// ========================================
 export const ADAPTERS = {
   openai: openaiAdapter,
   anthropic: anthropicAdapter,

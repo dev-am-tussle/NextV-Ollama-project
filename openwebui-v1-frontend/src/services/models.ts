@@ -73,17 +73,65 @@ export interface AvailableModelsForOrgResponse {
 }
 
 export async function getAvailableModelsForOrganization(): Promise<AvailableModelsForOrgResponse> {
-  // Use existing admin/models endpoint with is_active=true filter
-  const response = await getAllModels({
-    is_active: true,
-    limit: 100 // Get all active models
-  });
+  // Smart fetch that works for both SuperAdmin and OrgAdmin contexts
+  const superAdminToken = localStorage.getItem('superAdminToken');
+  const adminToken = localStorage.getItem('adminAuthToken');
   
-  return {
-    success: response.success,
-    data: response.data || [],
-    pagination: response.pagination
-  };
+  let token: string | null = null;
+  let endpoint = '/api/admin/models';
+  
+  // Check SuperAdmin context first
+  if (superAdminToken) {
+    token = superAdminToken;
+    // SuperAdmins can use the same admin models endpoint or a dedicated one
+    endpoint = '/api/admin/models';
+  } else if (adminToken) {
+    token = adminToken;
+    endpoint = '/api/admin/models';
+  }
+  
+  if (!token) {
+    throw new Error('No authentication token found. Please log in as Super Admin or Organization Admin.');
+  }
+  
+  try {
+    const queryParams = new URLSearchParams({
+      is_active: 'true',
+      limit: '100'
+    });
+    
+    const apiUrl = import.meta.env.VITE_API_URL;
+    const fullUrl = `${apiUrl}${endpoint}?${queryParams}`;
+    
+    console.log('🔄 Fetching models from:', fullUrl);
+    console.log('🔑 Using token:', token ? `${token.substring(0, 10)}...` : 'none');
+    
+    const response = await fetch(fullUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('❌ API Error:', response.status, errorData);
+      throw new Error(errorData.error || errorData.message || `HTTP error! status: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    console.log('✅ Models fetched successfully:', result.data?.length || 0, 'models');
+    
+    return {
+      success: result.success !== false,
+      data: result.data || [],
+      pagination: result.pagination
+    };
+  } catch (error) {
+    console.error('❌ Error fetching models for organization:', error);
+    throw error;
+  }
 }
 
 // Admin: Get all models (with pagination and filters)

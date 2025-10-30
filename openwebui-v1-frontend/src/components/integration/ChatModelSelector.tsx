@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Bot, ChevronDown, Zap } from 'lucide-react';
+import { Bot, ChevronDown, Zap, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useIntegrationStore } from '@/stores/useIntegrationStore';
 import { cn } from '@/lib/utils';
 
@@ -27,6 +28,7 @@ export function ChatModelSelector({
   disabled = false 
 }: ChatModelSelectorProps) {
   const [open, setOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const { availableModels, fetchAvailableModels, isLoadingModels } = useIntegrationStore();
 
   useEffect(() => {
@@ -34,8 +36,15 @@ export function ChatModelSelector({
     fetchAvailableModels();
   }, [fetchAvailableModels]);
 
-  // Group models by provider
-  const modelsByProvider = availableModels.reduce((acc, model) => {
+  // Filter models based on search query
+  const filteredModels = availableModels.filter(model => 
+    model.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    model.provider.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    model.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Group filtered models by provider
+  const modelsByProvider = filteredModels.reduce((acc, model) => {
     if (!acc[model.provider]) {
       acc[model.provider] = [];
     }
@@ -48,6 +57,7 @@ export function ChatModelSelector({
   const handleModelSelect = (modelId: string) => {
     onModelSelect(modelId);
     setOpen(false);
+    setSearchQuery('');
   };
 
   if (availableModels.length === 0 && !isLoadingModels) {
@@ -89,55 +99,85 @@ export function ChatModelSelector({
       </PopoverTrigger>
       
       <PopoverContent className="w-[400px] p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Search models..." />
-          <CommandEmpty>No models found.</CommandEmpty>
-          
-          {Object.entries(modelsByProvider).map(([provider, models]) => (
-            <CommandGroup key={provider} heading={provider.toUpperCase()}>
-              {models.map((model) => (
-                <CommandItem
-                  key={model.id}
-                  value={model.id}
-                  onSelect={() => handleModelSelect(model.id)}
-                  className="flex items-start gap-3 py-3"
-                >
-                  <div className="flex items-center">
-                    <div className={cn(
-                      "h-2 w-2 rounded-full",
-                      selectedModel === model.id ? "bg-blue-600" : "bg-gray-300"
-                    )} />
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm truncate">
-                        {model.name}
-                      </span>
-                      <Badge variant="outline" className="text-xs">
-                        {model.provider}
-                      </Badge>
+        <div className="flex flex-col">
+          {/* Search Input */}
+          <div className="p-3 border-b">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search models..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+          </div>
+
+          {/* Models List */}
+          <ScrollArea className="h-[300px]">
+            {filteredModels.length === 0 ? (
+              <div className="p-8 text-center text-sm text-muted-foreground">
+                No models found.
+              </div>
+            ) : (
+              <div className="p-2">
+                {Object.entries(modelsByProvider).map(([provider, models], providerIndex) => (
+                  <div key={provider}>
+                    {/* Provider Header */}
+                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      {provider}
                     </div>
                     
-                    {model.description && (
-                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                        {model.description}
-                      </p>
+                    {/* Models in this provider */}
+                    {models.map((model) => (
+                      <button
+                        key={model.id}
+                        onClick={() => handleModelSelect(model.id)}
+                        className={cn(
+                          "w-full flex items-start gap-3 px-2 py-3 rounded-md hover:bg-accent transition-colors text-left",
+                          selectedModel === model.id && "bg-accent"
+                        )}
+                      >
+                        <div className="flex items-center pt-0.5">
+                          <div className={cn(
+                            "h-2 w-2 rounded-full",
+                            selectedModel === model.id ? "bg-blue-600" : "bg-gray-300"
+                          )} />
+                        </div>
+                        
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-sm truncate">
+                              {model.name}
+                            </span>
+                            <Badge variant="outline" className="text-xs">
+                              {model.provider}
+                            </Badge>
+                          </div>
+                          
+                          {model.description && (
+                            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                              {model.description}
+                            </p>
+                          )}
+                        </div>
+                        
+                        {selectedModel === model.id && (
+                          <Zap className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                        )}
+                      </button>
+                    ))}
+                    
+                    {/* Separator between providers */}
+                    {providerIndex < Object.keys(modelsByProvider).length - 1 && (
+                      <Separator className="my-2" />
                     )}
                   </div>
-                  
-                  {selectedModel === model.id && (
-                    <Zap className="h-4 w-4 text-blue-600" />
-                  )}
-                </CommandItem>
-              ))}
-              
-              {Object.keys(modelsByProvider).indexOf(provider) < Object.keys(modelsByProvider).length - 1 && (
-                <Separator className="my-2" />
-              )}
-            </CommandGroup>
-          ))}
-        </Command>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+        </div>
       </PopoverContent>
     </Popover>
   );

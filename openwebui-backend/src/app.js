@@ -1,4 +1,12 @@
-// app.js (recommended updated)
+/**
+ * ========================================
+ * OPENWEBUI BACKEND - MAIN APPLICATION
+ * ========================================
+ * 
+ * Professional Express.js backend with centralized configuration
+ * All routes are managed through centralized routes/index.js
+ */
+
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -6,28 +14,8 @@ dotenv.config();
 import helmet from "helmet";
 import morgan from "morgan";
 import cookieParser from "cookie-parser";
-import modelRoutes from "./routes/ollama.routes.js";
-import modelsRoutes from "./routes/models.routes.js";
-import adminModelsRoutes from "./routes/adminModels.routes.js";
-import adminUsersRoutes from "./routes/adminUsers.routes.js";
-import userModelsRoutes from "./routes/userModels.routes.js";
-import authRoutes from "./routes/auth.routes.js";
-import conversationRoutes from "./routes/conversation.routes.js";
-import savedPromptsRoutes from "./routes/savedprompts.routes.js";
-import filesRoutes from "./routes/files.routes.js";
-import oauthRoutes from "./routes/oauth.routes.js";
-import adminAuthRoutes from "./routes/adminAuth.routes.js";
-import organizationManagementRoutes from "./routes/organizationManagement.routes.js";
-import onboardingRoutes from "./routes/onboarding.routes.js";
-import superAdminRoutes from "./routes/superAdmin.routes.js";
-import unifiedAuthRoutes from "./routes/unifiedAuth.routes.js";
-import invitationRoutes from "./routes/invitation.routes.js";
-import categorizedModelsRoutes from "./routes/categorizedModels.routes.js";
-import externalApisRoutes from "./routes/externalApis.routes.js";
-import userExternalApiRoutes from "./routes/userExternalApi.routes.js";
-import modelsV2Routes from "./routes/models.js";
-import jwt from "jsonwebtoken";
-import { connectDB, closeDB } from "./config/ollama.db.js"; // DB helpers import
+import { connectDB, closeDB } from "./config/ollama.db.js";
+import registerRoutes from "./routes/index.js"; // ✅ Centralized routes
 
 
 const app = express();
@@ -36,11 +24,26 @@ const app = express();
 app.use(helmet());
 app.use(morgan("dev"));
 
-// CORS
-const FRONTEND = process.env.FRONTEND_ORIGIN || "http://localhost:8080";
+// CORS - Support multiple origins
+const allowedOrigins = process.env.FRONTEND_ORIGIN 
+  ? process.env.FRONTEND_ORIGIN.split(',').map(origin => origin.trim())
+  : ['http://localhost:8080'];
+
+console.log('🔒 CORS Allowed Origins:', allowedOrigins);
+
 app.use(
   cors({
-    origin: FRONTEND,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, Postman, or same-origin)
+      if (!origin) return callback(null, true);
+      
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn(`⚠️ CORS blocked origin: ${origin}`);
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
   })
 );
@@ -73,75 +76,85 @@ function validateEnv() {
 }
 validateEnv();
 
-// health
+// ========================================
+// HEALTH CHECK
+// ========================================
 app.get("/health", (req, res) => res.json({ status: "ok" }));
 
-// routes
-app.use("/api/v1/models", modelRoutes); // ollama streaming routes
-app.use("/api/v1/available-models", modelsRoutes); // user sees active models
-app.use("/api/admin/models", adminModelsRoutes); // admin manages catalog
-app.use("/api/admin/users", adminUsersRoutes); // admin manages users
-app.use("/api/v1/user", userModelsRoutes); // user manages their pulled models
-app.use("/api/v1/user", categorizedModelsRoutes); // categorized model management
-app.use("/api/v1/user/external-apis", userExternalApiRoutes); // user external APIs
-app.use("/api/v1/auth", authRoutes);
-app.use("/api/v1/conversations", conversationRoutes);
-app.use("/api/v1/saved-prompts", savedPromptsRoutes);
-app.use("/api/v1/files", filesRoutes);
-app.use("/api/v1/auth", oauthRoutes);
-app.use("/api/v1/external-apis", externalApisRoutes);
-app.use("/api/models", modelsV2Routes);
+// ========================================
+// API ROUTES (Centralized)
+// ========================================
+registerRoutes(app);
 
-// Admin routes
-app.use("/api/admin/auth", adminAuthRoutes);
-app.use("/api/super-admin/auth", superAdminRoutes);
-app.use("/api/super-admin/organizations", organizationManagementRoutes);
-
-// Onboarding routes
-app.use("/api/onboarding", onboardingRoutes);
-
-// Invitation routes
-app.use("/api", invitationRoutes);
-
-// Unified authentication route
-app.use("/api/v1/unified-auth", unifiedAuthRoutes);
-
-app.get("/", async (req, res) => {
-  // Default welcome message
-  const base = { message: "Welcome to OpenWebUI Backend API" };
-
-  // If an Authorization Bearer token is provided, try to decode it and
-  // include the user's profile (from getUserProfile) in the response so
-  // frontend can fetch user details from the root route without calling /auth/me
-  // Keep root lightweight. Frontend should not rely on root for fetching profile.
-  return res.json(base);
+// ========================================
+// ROOT ENDPOINT
+// ========================================
+app.get("/", (req, res) => {
+  res.json({
+    message: "Welcome to OpenWebUI Backend API",
+    version: "1.0.0",
+    documentation: "/api/routes" // Future: API documentation endpoint
+  });
 });
 
-// 404
+// ========================================
+// ERROR HANDLING
+// ========================================
+
+// 404 Handler
 app.use((req, res) => {
-  res.status(404).json({ error: "Not found" });
+  res.status(404).json({
+    success: false,
+    error: "Endpoint not found",
+    path: req.originalUrl,
+    method: req.method
+  });
 });
 
-// error handler
+// Global Error Handler
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
   if (res.headersSent) return next(err);
-  res.status(err.status || 500).json({ error: err.message || "Server error" });
+  
+  res.status(err.status || 500).json({
+    success: false,
+    error: err.message || "Internal server error",
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+  });
 });
 
-const PORT = process.env.PORT;
+// ========================================
+// SERVER STARTUP
+// ========================================
+
+const PORT = process.env.PORT || 3000;
 
 async function start() {
   try {
-    await connectDB(); // <- yahi call karein
+    // Connect to database
+    await connectDB();
+    
+    // Start server
     const server = app.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+      console.log('\n========================================');
+      console.log('🚀 SERVER STARTED SUCCESSFULLY');
+      console.log('========================================');
+      console.log(`📍 URL: http://localhost:${PORT}`);
+      console.log(`📅 Started at: ${new Date().toISOString()}`);
+      console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log('========================================\n');
     });
 
+    // ========================================
+    // GRACEFUL SHUTDOWN
+    // ========================================
     const graceful = (signal) => {
-      console.log(`${signal} received — shutting down`);
+      console.log(`\n⚠️  ${signal} received — shutting down gracefully...`);
       server.close(async () => {
+        console.log('✓ HTTP server closed');
         await closeDB();
+        console.log('✓ Database connection closed');
+        console.log('👋 Goodbye!\n');
         process.exit(0);
       });
     };
@@ -149,15 +162,20 @@ async function start() {
     process.on("SIGINT", graceful);
     process.on("SIGTERM", graceful);
 
+    // ========================================
+    // ERROR HANDLERS
+    // ========================================
     process.on("unhandledRejection", (err) => {
-      console.error("unhandledRejection:", err);
+      console.error("❌ Unhandled Rejection:", err);
     });
+    
     process.on("uncaughtException", (err) => {
-      console.error("uncaughtException:", err);
+      console.error("❌ Uncaught Exception:", err);
       process.exit(1);
     });
+    
   } catch (err) {
-    console.error("Startup failed:", err);
+    console.error("❌ Startup failed:", err);
     process.exit(1);
   }
 }

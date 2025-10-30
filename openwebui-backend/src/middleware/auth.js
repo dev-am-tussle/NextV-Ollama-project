@@ -28,7 +28,17 @@ export function requireAuth(req, res, next) {
       return res.status(401).json({ error: "Invalid token payload" });
     }
 
-    req.user = { id: decoded.sub, email: decoded.email };
+    // Enhanced user object with all token information
+    req.user = {
+      sub: decoded.sub,
+      id: decoded.sub, // backward compatibility
+      email: decoded.email,
+      role: decoded.role,
+      userType: decoded.userType || 'user',
+      admin_type: decoded.admin_type, // super_admin, org_admin
+      organization_id: decoded.organization_id // IMPORTANT: for filtering
+    };
+    
     return next();
   } catch (err) {
     console.error("requireAuth error:", err);

@@ -1,7 +1,7 @@
 // Organization Management Service
 import { isSuperAdmin } from "./adminAuth";
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3000';
+const API_BASE = import.meta.env.VITE_API_BASE;
 
 // Smart API fetch that detects SuperAdmin vs Admin context
 const smartApiFetch = async (endpoint: string, options: RequestInit = {}) => {

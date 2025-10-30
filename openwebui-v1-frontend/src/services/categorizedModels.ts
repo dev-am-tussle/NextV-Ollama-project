@@ -173,31 +173,78 @@ export async function downloadModelWithProgress(
   const { onProgress, onError, onComplete } = callbacks;
   
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/user/download-model-stream`, {
+    // Get auth token
+    const authToken = localStorage.getItem('authToken');
+    if (!authToken) {
+      throw new Error('Authentication required. Please log in again.');
+    }
+
+    // ✅ Correct URL with /api/v1/user and modelName in URL path
+    const apiUrl = import.meta.env.VITE_API_URL;
+    const url = `${apiUrl}/api/v1/user/download-model-stream/${encodeURIComponent(modelName)}`;
+    
+    console.log('[Download] Starting download for:', modelName);
+    console.log('[Download] Request URL:', url);
+    
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+        'Authorization': `Bearer ${authToken}`,
       },
-      body: JSON.stringify({ model_name: modelName }),
     });
 
+    console.log('[Download] Response status:', response.status, response.statusText);
+
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      // Handle specific error codes
+      if (response.status === 401) {
+        throw new Error('Session expired. Please log in again.');
+      }
+      if (response.status === 403) {
+        throw new Error('You do not have permission to download this model.');
+      }
+      if (response.status === 404) {
+        throw new Error('Model not found or download endpoint not available.');
+      }
+      if (response.status === 400) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Invalid request. Model may already be downloaded.');
+      }
+      
+      throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+    }
+
+    // Check if response is SSE
+    const contentType = response.headers.get('content-type');
+    if (!contentType?.includes('text/event-stream')) {
+      console.warn('[Download] Expected SSE stream, got:', contentType);
     }
 
     const reader = response.body?.getReader();
     if (!reader) {
-      throw new Error('Response body is not readable');
+      throw new Error('Unable to read response stream');
     }
 
     const decoder = new TextDecoder();
     let buffer = '';
+    let lastProgressTime = Date.now();
+    let receivedData = false;
+
+    console.log('[Download] Starting to read stream...');
 
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      
+      if (done) {
+        console.log('[Download] Stream ended');
+        if (!receivedData) {
+          throw new Error('Download stream ended without receiving any data');
+        }
+        break;
+      }
 
+      receivedData = true;
       buffer += decoder.decode(value, { stream: true });
       
       // Process complete lines
@@ -207,33 +254,69 @@ export async function downloadModelWithProgress(
       for (const line of lines) {
         if (line.trim() && line.startsWith('data: ')) {
           try {
-            const eventData = line.replace(/^data: /, '');
+            const eventData = line.replace(/^data: /, '').trim();
+            if (!eventData) continue;
+            
             const progress: DownloadProgress = JSON.parse(eventData);
+            const now = Date.now();
+
+            console.log('[Download] Progress:', progress);
+
+            // Throttle progress updates (max 10 per second)
+            if (progress.type === 'progress' && now - lastProgressTime < 100) {
+              continue;
+            }
+            lastProgressTime = now;
 
             switch (progress.type) {
               case 'starting':
               case 'progress':
                 onProgress && onProgress(progress);
                 break;
+                
               case 'error':
+                console.error('[Download] Error received:', progress);
                 onError && onError(progress);
-                return; // Stop processing on error
+                reader.cancel(); // Stop reading stream
+                return;
+                
               case 'complete':
+                console.log('[Download] Completed:', progress);
                 onComplete && onComplete(progress);
-                return; // Stop processing on completion
+                reader.cancel(); // Stop reading stream
+                return;
             }
           } catch (parseError) {
-            console.warn('Failed to parse SSE data:', line, parseError);
+            console.warn('[Download] Failed to parse SSE data:', line, parseError);
           }
         }
       }
     }
+
+    // If stream ended without explicit completion
+    if (receivedData) {
+      console.log('[Download] Stream ended, assuming success');
+      onComplete && onComplete({
+        type: 'complete',
+        success: true,
+        percentage: 100,
+        status: 'Download completed'
+      });
+    }
+
   } catch (error) {
-    console.error('Error in downloadModelWithProgress:', error);
+    console.error('[Download] Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    
     onError && onError({
       type: 'error',
-      error: error instanceof Error ? error.message : 'Unknown error occurred',
-      suggestions: ['Check internet connection', 'Try again later', 'Contact support']
+      error: errorMessage,
+      suggestions: [
+        'Check your internet connection',
+        'Verify Ollama service is running',
+        'Ensure you have sufficient disk space',
+        'Try refreshing the page and retry'
+      ]
     });
   }
 }

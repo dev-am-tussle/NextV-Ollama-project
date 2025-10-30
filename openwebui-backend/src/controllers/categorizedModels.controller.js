@@ -9,37 +9,49 @@ import { pullModel, removeModel, verifyModelInstalled } from "../services/ollama
 const getCategorizedModelsForUser = async (req, res) => {
     try {
         const userId = req.user.id;
-        const user = await User.findById(userId).populate('organization');
+        
+        // ✅ FIX: Import UserSettings
+        const { UserSettings } = await import('../models/user.models.js');
+        
+        // Get user with organization
+        const user = await User.findById(userId).populate('organization_id');
 
-        if (!user || !user.organization) {
+        if (!user || !user.organization_id) {
             return res.status(404).json({
                 success: false,
                 message: "User or organization not found"
             });
         }
 
-        const organization = user.organization;
+        const organization = user.organization_id;
 
-        // Get user's pulled models
-        const pulledModels = user.settings?.pulled_models || [];
+        // ✅ FIX: Get user's pulled models from UserSettings collection
+        const userSettings = await UserSettings.findOne({ user_id: userId }).populate('pulled_models.model_id');
+        const pulledModels = userSettings?.pulled_models || [];
 
-        // Get organization's allowed models
-        const allowedModelNames = organization.settings?.allowed_models || [];
+        // Get organization's allowed models (array of objects with model_id)
+        const allowedModelDocs = organization.settings?.allowed_models || [];
+        const allowedModelIds = allowedModelDocs
+            .filter(doc => doc.enabled)
+            .map(doc => doc.model_id.toString());
 
         // Get all available models from database
         const allAvailableModels = await AvailableModel.find({});
 
-        // Create a map for quick lookup
-        const modelMap = new Map();
+        // Create maps for quick lookup
+        const modelMapByName = new Map();
+        const modelMapById = new Map();
         allAvailableModels.forEach(model => {
-            modelMap.set(model.name, model);
+            modelMapByName.set(model.name, model);
+            modelMapById.set(model._id.toString(), model);
         });
 
-        // 1. Downloaded Models (user.settings.pulled_models)
+        // 1. Downloaded Models (UserSettings.pulled_models)
         const downloadedModels = pulledModels
             .map(pulledModel => {
-                const baseModel = modelMap.get(pulledModel.name);
-                if (!baseModel) return null;
+                // ✅ FIX: pulledModel.model_id is already populated
+                const baseModel = pulledModel.model_id;
+                if (!baseModel || !baseModel._id) return null;
 
                 return {
                     _id: baseModel._id,
@@ -55,20 +67,24 @@ const getCategorizedModelsForUser = async (req, res) => {
                     // Downloaded-specific fields
                     pulled_at: pulledModel.pulled_at,
                     usage_count: pulledModel.usage_count || 0,
-                    last_used: pulledModel.last_used
+                    last_used: pulledModel.last_used,
+                    download_status: pulledModel.download_status,
+                    file_size: pulledModel.file_size
                 };
             })
             .filter(Boolean);
 
-        // 2. Available to Download (org.settings.allowed_models minus user.settings.pulled_models)
-        const availableToDownload = allowedModelNames
-            .filter(modelName => !pulledModels.some(p => p.name === modelName))
-            .map(modelName => {
-                const baseModel = modelMap.get(modelName);
+        // 2. Available to Download (org.settings.allowed_models minus UserSettings.pulled_models)
+        const availableToDownload = allowedModelIds
+            .map(modelId => {
+                const baseModel = modelMapById.get(modelId);
                 if (!baseModel) return null;
 
-                // Find the org purchase details
-                const orgPurchase = organization.settings?.purchased_models?.find(pm => pm.model_name === modelName);
+                // ✅ FIX: Skip if already downloaded (check by model_id)
+                if (pulledModels.some(p => p.model_id && p.model_id._id.toString() === modelId)) return null;
+
+                // Find the org model entry for purchase details
+                const orgModelEntry = allowedModelDocs.find(doc => doc.model_id.toString() === modelId);
 
                 return {
                     _id: baseModel._id,
@@ -82,10 +98,10 @@ const getCategorizedModelsForUser = async (req, res) => {
                     tags: baseModel.tags,
                     use_cases: baseModel.use_cases,
                     // Available to download specific fields
-                    purchased_at: orgPurchase?.purchased_at || new Date(),
+                    purchased_at: orgModelEntry?.purchase_details?.purchased_at || orgModelEntry?.added_at,
                     org_purchase_details: {
-                        cost: orgPurchase?.cost || 0,
-                        billing_cycle: orgPurchase?.billing_cycle || 'unknown'
+                        cost: orgModelEntry?.purchase_details?.cost || 0,
+                        billing_cycle: orgModelEntry?.purchase_details?.billing_cycle || 'monthly'
                     }
                 };
             })
@@ -93,7 +109,7 @@ const getCategorizedModelsForUser = async (req, res) => {
 
         // 3. Available for Purchase (all models minus org.settings.allowed_models)
         const availableForPurchase = allAvailableModels
-            .filter(model => !allowedModelNames.includes(model.name))
+            .filter(model => !allowedModelIds.includes(model._id.toString()))
             .map(model => ({
                 _id: model._id,
                 name: model.name,
@@ -161,27 +177,59 @@ const downloadModelWithProgress = async (req, res) => {
         const { modelName } = req.params;
         const userId = req.user.id;
 
-        const user = await User.findById(userId).populate('organization');
+        // ✅ FIX: Import UserSettings model
+        const { UserSettings } = await import('../models/user.models.js');
 
-        if (!user || !user.organization) {
+        // Get user with organization
+        const user = await User.findById(userId).populate('organization_id');
+
+        if (!user || !user.organization_id) {
             return res.status(404).json({
                 success: false,
                 message: "User or organization not found"
             });
         }
 
+        // ✅ FIX: Get user settings from separate collection
+        let userSettings = await UserSettings.findOne({ user_id: userId });
+        
+        // Create settings if not exists
+        if (!userSettings) {
+            console.log(`[downloadModelWithProgress] Creating settings for user ${userId}`);
+            userSettings = await UserSettings.create({
+                user_id: userId,
+                pulled_models: []
+            });
+        }
+
         // Check if user's organization has access to this model
-        const allowedModels = user.organization.settings?.allowed_models || [];
-        if (!allowedModels.includes(modelName)) {
+        // allowed_models is an array of objects with model_id references
+        const allowedModels = user.organization_id.settings?.allowed_models || [];
+        
+        // Find the model in AvailableModel collection to get its _id
+        const modelDoc = await AvailableModel.findOne({ name: modelName });
+        if (!modelDoc) {
+            return res.status(404).json({
+                success: false,
+                message: "Model not found in system"
+            });
+        }
+
+        // Check if this model_id is in organization's allowed_models
+        const hasAccess = allowedModels.some(
+            allowedModel => allowedModel.model_id.toString() === modelDoc._id.toString() && allowedModel.enabled
+        );
+
+        if (!hasAccess) {
             return res.status(403).json({
                 success: false,
                 message: "This model is not available for your organization"
             });
         }
 
-        // Check if already downloaded
-        const pulledModels = user.settings?.pulled_models || [];
-        if (pulledModels.some(m => m.name === modelName)) {
+        // ✅ FIX: Check if already downloaded using model_id, not name
+        const pulledModels = userSettings.pulled_models || [];
+        if (pulledModels.some(m => m.model_id.toString() === modelDoc._id.toString())) {
             return res.status(400).json({
                 success: false,
                 message: "Model already downloaded"
@@ -209,7 +257,11 @@ const downloadModelWithProgress = async (req, res) => {
                 percentage: 0
             });
 
+            // ✅ FIX: Track if already saved to prevent duplicates
+            let modelSavedToDb = false;
+
             const result = await pullModel(modelName, 
+                // Progress callback - only send updates, no DB operations
                 (progress) => {
                     sendProgress({
                         type: 'progress',
@@ -219,6 +271,7 @@ const downloadModelWithProgress = async (req, res) => {
                         total: progress.total
                     });
                 },
+                // Error callback
                 (error) => {
                     sendProgress({
                         type: 'error',
@@ -226,24 +279,52 @@ const downloadModelWithProgress = async (req, res) => {
                         suggestions: error.suggestions || []
                     });
                 },
+                // Complete callback - ONLY CALLED ONCE at the end
                 async (result) => {
-                    if (result.success) {
-                        // Update user's pulled models
-                        await User.findByIdAndUpdate(userId, {
-                            $push: {
-                                'settings.pulled_models': {
-                                    name: modelName,
-                                    pulled_at: new Date(),
-                                    usage_count: 0
-                                }
-                            }
-                        });
+                    if (result.success && !modelSavedToDb) {
+                        modelSavedToDb = true; // Prevent duplicate saves
+                        
+                        console.log(`[downloadModelWithProgress] Saving ${modelName} (${modelDoc._id}) to user's pulled_models`);
+                        
+                        // ✅ FIX: Check in UserSettings collection
+                        const freshSettings = await UserSettings.findOne({ user_id: userId });
+                        const alreadyExists = freshSettings?.pulled_models?.some(
+                            m => m.model_id.toString() === modelDoc._id.toString()
+                        );
+
+                        if (!alreadyExists) {
+                            // ✅ FIX: Update UserSettings collection, not User
+                            await UserSettings.findOneAndUpdate(
+                                { user_id: userId },
+                                {
+                                    $push: {
+                                        pulled_models: {
+                                            model_id: modelDoc._id,  // Store model_id reference
+                                            pulled_at: new Date(),
+                                            usage_count: 0,
+                                            last_used: null,
+                                            local_path: null,
+                                            file_size: 0,
+                                            download_status: 'completed'
+                                        }
+                                    },
+                                    $set: {
+                                        updated_at: new Date()
+                                    }
+                                },
+                                { upsert: true, new: true }
+                            );
+                            console.log(`[downloadModelWithProgress] Successfully saved ${modelName} to UserSettings`);
+                        } else {
+                            console.log(`[downloadModelWithProgress] ${modelName} already exists in UserSettings, skipping save`);
+                        }
 
                         sendProgress({
                             type: 'complete',
                             status: 'Download completed successfully',
                             percentage: 100,
-                            success: true
+                            success: true,
+                            modelName: modelName
                         });
                     }
                 }
@@ -346,9 +427,10 @@ const requestModelPurchase = async (req, res) => {
         const { justification } = req.body;
         const userId = req.user.id;
 
-        const user = await User.findById(userId).populate('organization');
+        // ✅ FIX: Populate organization_id instead of organization
+        const user = await User.findById(userId).populate('organization_id');
 
-        if (!user || !user.organization) {
+        if (!user || !user.organization_id) {
             return res.status(404).json({
                 success: false,
                 message: "User or organization not found"
@@ -364,7 +446,7 @@ const requestModelPurchase = async (req, res) => {
         }
 
         // Check if already requested or purchased
-        const organization = user.organization;
+        const organization = user.organization_id;
         const existingRequest = organization.settings?.model_requests?.find(req =>
             req.model_id.toString() === modelId && req.status === 'pending'
         );
@@ -376,8 +458,13 @@ const requestModelPurchase = async (req, res) => {
             });
         }
 
+        // Check if model is already in allowed_models (array of objects with model_id)
         const allowedModels = organization.settings?.allowed_models || [];
-        if (allowedModels.includes(model.name)) {
+        const alreadyHasAccess = allowedModels.some(
+            item => item.model_id.toString() === modelId
+        );
+        
+        if (alreadyHasAccess) {
             return res.status(400).json({
                 success: false,
                 message: "Model is already available for your organization"

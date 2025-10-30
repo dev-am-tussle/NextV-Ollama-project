@@ -974,7 +974,7 @@ const CategorizedModelSelector: React.FC<CategorizedModelSelectorProps> = ({
 
       {/* Model Detail Side Panel */}
       <Sheet open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <SheetContent className="w-[400px] sm:w-[540px]">
+        <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
           <SheetHeader>
             <SheetTitle>Model Details</SheetTitle>
             <SheetDescription>

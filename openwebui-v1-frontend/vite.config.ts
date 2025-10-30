@@ -25,91 +25,87 @@ export default defineConfig(({ mode }) => ({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: (id) => {
-          // Node modules chunking
-          if (id.includes('node_modules')) {
-            // React ecosystem
-            if (id.includes('react') || id.includes('react-dom')) {
-              return 'react-core';
-            }
-            if (id.includes('react-router')) {
-              return 'react-router';
-            }
-            
-            // Radix UI - Split into smaller chunks by component type
-            if (id.includes('@radix-ui')) {
-              if (id.includes('dialog') || id.includes('alert-dialog')) {
-                return 'radix-dialog';
-              }
-              if (id.includes('dropdown') || id.includes('menu')) {
-                return 'radix-menu';
-              }
-              if (id.includes('select') || id.includes('combobox')) {
-                return 'radix-select';
-              }
-              if (id.includes('popover') || id.includes('tooltip') || id.includes('hover-card')) {
-                return 'radix-overlay';
-              }
-              if (id.includes('tabs') || id.includes('accordion') || id.includes('collapsible')) {
-                return 'radix-navigation';
-              }
-              // All other radix components
-              return 'radix-misc';
-            }
-            
-            // Data fetching
-            if (id.includes('@tanstack/react-query')) {
-              return 'tanstack-query';
-            }
-            
-            // HTTP client
-            if (id.includes('axios')) {
-              return 'axios';
-            }
-            
-            // Icons
-            if (id.includes('lucide-react')) {
-              return 'lucide-icons';
-            }
-            
-            // Form handling
-            if (id.includes('react-hook-form') || id.includes('@hookform')) {
-              return 'react-forms';
-            }
-            
-            // Validation
-            if (id.includes('zod')) {
-              return 'zod';
-            }
-            
-            // State management
-            if (id.includes('zustand')) {
-              return 'zustand';
-            }
-            
-            // Charts
-            if (id.includes('recharts')) {
-              return 'recharts';
-            }
-            
-            // Date handling
-            if (id.includes('date-fns')) {
-              return 'date-fns';
-            }
-            
-            // Excel/CSV
-            if (id.includes('xlsx')) {
-              return 'xlsx';
-            }
-            
-            // Utilities
-            if (id.includes('clsx') || id.includes('class-variance-authority') || id.includes('tailwind-merge')) {
-              return 'utils';
-            }
-            
-            // All other node_modules
-            return 'vendor';
-          }
+        manualChunks: {
+          // React - Keep together with all React ecosystem
+          'react-vendor': [
+            'react',
+            'react-dom',
+            'react/jsx-runtime',
+            'react-router-dom',
+            'scheduler'
+          ],
+          
+          // TanStack Query
+          'query-vendor': ['@tanstack/react-query'],
+          
+          // Radix UI - Group 1: Dialogs & Overlays
+          'ui-dialogs': [
+            '@radix-ui/react-dialog',
+            '@radix-ui/react-alert-dialog',
+            '@radix-ui/react-popover',
+            '@radix-ui/react-tooltip'
+          ],
+          
+          // Radix UI - Group 2: Form Controls
+          'ui-forms': [
+            '@radix-ui/react-select',
+            '@radix-ui/react-checkbox',
+            '@radix-ui/react-radio-group',
+            '@radix-ui/react-switch',
+            '@radix-ui/react-slider',
+            '@radix-ui/react-label'
+          ],
+          
+          // Radix UI - Group 3: Navigation & Layout
+          'ui-navigation': [
+            '@radix-ui/react-tabs',
+            '@radix-ui/react-accordion',
+            '@radix-ui/react-dropdown-menu',
+            '@radix-ui/react-menubar',
+            '@radix-ui/react-navigation-menu',
+            '@radix-ui/react-context-menu'
+          ],
+          
+          // Radix UI - Group 4: Misc Components
+          'ui-misc': [
+            '@radix-ui/react-toast',
+            '@radix-ui/react-progress',
+            '@radix-ui/react-avatar',
+            '@radix-ui/react-separator',
+            '@radix-ui/react-scroll-area',
+            '@radix-ui/react-collapsible',
+            '@radix-ui/react-toggle',
+            '@radix-ui/react-toggle-group',
+            '@radix-ui/react-hover-card',
+            '@radix-ui/react-aspect-ratio',
+            '@radix-ui/react-slot'
+          ],
+          
+          // Icons
+          'icons': ['lucide-react'],
+          
+          // Forms
+          'forms': ['react-hook-form', '@hookform/resolvers', 'zod'],
+          
+          // Charts
+          'charts': ['recharts'],
+          
+          // Utils
+          'utils': [
+            'clsx',
+            'tailwind-merge',
+            'class-variance-authority',
+            'date-fns'
+          ],
+          
+          // HTTP & State
+          'network': ['axios'],
+          'state': ['zustand'],
+          
+          // Large libraries
+          'xlsx': ['xlsx'],
+          'cmdk': ['cmdk'],
+          'carousel': ['embla-carousel-react'],
         },
       },
     },

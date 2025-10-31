@@ -10,7 +10,7 @@ class SendGridService {
     }
     
     sgMail.setApiKey(process.env.SEND_GRID_API_KEY);
-    this.senderEmail = process.env.SENDER_EMAIL || 'noreply@company.com';
+    this.senderEmail = process.env.SENDER_EMAIL;
     console.log('✅ SendGrid service initialized');
   }
 
@@ -33,7 +33,7 @@ class SendGridService {
         token,
         organizationName = 'Your Organization',
         inviterName = 'Your Admin',
-        frontendUrl = process.env.FRONTEND_ORIGIN
+        frontendUrl = process.env.EMAIL_VERIFY_URL
       } = invitationData;
 
       if (!process.env.SEND_GRID_API_KEY) {
@@ -60,6 +60,10 @@ class SendGridService {
           email: this.senderEmail,
           name: organizationName
         },
+        replyTo: {
+          email: this.senderEmail,
+          name: organizationName
+        },
         subject: `You're invited to join ${organizationName}`,
         html: emailTemplate,
         text: this.generatePlainTextInvitation({
@@ -75,12 +79,23 @@ class SendGridService {
           openTracking: {
             enable: true
           }
+        },
+        mailSettings: {
+          sandboxMode: {
+            enable: false
+          }
         }
       };
 
       const response = await sgMail.send(msg);
       
       console.log('✅ Invitation email sent successfully to:', email);
+      console.log('📧 SendGrid Response:', {
+        statusCode: response[0].statusCode,
+        messageId: response[0].headers['x-message-id'] || 'unknown',
+        recipient: email
+      });
+      
       return {
         success: true,
         message: 'Invitation email sent successfully',

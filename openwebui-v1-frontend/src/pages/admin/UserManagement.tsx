@@ -78,7 +78,7 @@ export const UserManagement = () => {
             <Card>
                 <CardHeader>
                     <div className="flex items-center justify-between">
-                        <CardTitle>Organization Users</CardTitle>
+                        <CardTitle>Department Users</CardTitle>
                         <Button className="gap-2">
                             <UserPlus className="h-4 w-4" />
                             Add User

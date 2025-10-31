@@ -84,17 +84,25 @@ export const useUsers = () => {
         throw new Error('Backend server is not responding. Please start the backend server.');
       }
 
+      // Smart token detection: Check for both superAdminToken and adminAuthToken
+      const token = localStorage.getItem('superAdminToken') || localStorage.getItem('adminAuthToken');
+      
+      if (!token) {
+        throw new Error('No authentication token found. Please login again.');
+      }
+
       const response = await fetch(buildApiUrl(`/api/admin/users?page=${page}&limit=${limit}`), {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('superAdminToken')}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
       
       if (!response.ok) {
         if (response.status === 401) {
-          // Token expired or invalid - redirect to login
+          // Token expired or invalid - clear all auth tokens
           localStorage.removeItem('superAdminToken');
+          localStorage.removeItem('adminAuthToken');
           localStorage.removeItem('isSuperAdmin');
           localStorage.removeItem('userProfile');
           throw new Error('Session expired. Please login again.');
@@ -129,17 +137,25 @@ export const useUsers = () => {
 
   const fetchUsersStats = async () => {
     try {
+      // Smart token detection: Check for both superAdminToken and adminAuthToken
+      const token = localStorage.getItem('superAdminToken') || localStorage.getItem('adminAuthToken');
+      
+      if (!token) {
+        throw new Error('No authentication token found. Please login again.');
+      }
+
       const response = await fetch(buildApiUrl('/api/admin/users/stats'), {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('superAdminToken')}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
       
       if (!response.ok) {
         if (response.status === 401) {
-          // Token expired or invalid - redirect to login
+          // Token expired or invalid - clear all auth tokens
           localStorage.removeItem('superAdminToken');
+          localStorage.removeItem('adminAuthToken');
           localStorage.removeItem('isSuperAdmin');
           localStorage.removeItem('userProfile');
           throw new Error('Session expired. Please login again.');
@@ -159,10 +175,17 @@ export const useUsers = () => {
 
   const deleteUser = async (id: string) => {
     try {
+      // Smart token detection: Check for both superAdminToken and adminAuthToken
+      const token = localStorage.getItem('superAdminToken') || localStorage.getItem('adminAuthToken');
+      
+      if (!token) {
+        throw new Error('No authentication token found. Please login again.');
+      }
+
       const response = await fetch(buildApiUrl(`/api/admin/users/${id}`), {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('superAdminToken')}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
@@ -190,10 +213,17 @@ export const useUsers = () => {
 
   const updateUser = async (id: string, updates: Partial<User>) => {
     try {
+      // Smart token detection: Check for both superAdminToken and adminAuthToken
+      const token = localStorage.getItem('superAdminToken') || localStorage.getItem('adminAuthToken');
+      
+      if (!token) {
+        throw new Error('No authentication token found. Please login again.');
+      }
+
       const response = await fetch(buildApiUrl(`/api/admin/users/${id}`), {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('superAdminToken')}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(updates)

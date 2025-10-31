@@ -4,24 +4,27 @@ import { Conversation } from "../models/conversation.model.js";
 import { SavedPrompt } from "../models/savedPrompt.model.js";
 import { FileMeta } from "../models/file.model.js";
 
-// GET /api/admin/users - Get all users with their details
+// GET /api/admin/users - Get all users for the admin's organization
 export async function getAllUsers(req, res) {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    // Build query filter based on admin type
-    const query = {};
-    
-    // If admin has organization_id, filter users by that organization
-    // Super Admins don't have organization_id, so they see all users
-    if (req.user && req.user.organization_id) {
-      query.organization_id = req.user.organization_id;
-      console.log(`🔒 Admin filtering users by organization: ${req.user.organization_id}`);
-    } else {
-      console.log('🌐 Super Admin - fetching all users');
+    // Organization Admin: Must have organization_id in token
+    if (!req.user || !req.user.organization_id) {
+      return res.status(403).json({
+        success: false,
+        error: "Access denied. Organization admin token required."
+      });
     }
+
+    // Build query filter - ONLY for admin's organization
+    const query = {
+      organization_id: req.user.organization_id
+    };
+    
+    console.log(`🔒 Admin fetching users for organization: ${req.user.organization_id}`);
 
     // Fetch users with their settings
     const users = await User.find(query)
@@ -98,14 +101,26 @@ export async function getUserById(req, res) {
   try {
     const { id } = req.params;
 
-    const user = await User.findById(id)
+    // Organization Admin: Must have organization_id in token
+    if (!req.user || !req.user.organization_id) {
+      return res.status(403).json({
+        success: false,
+        error: "Access denied. Organization admin token required."
+      });
+    }
+
+    // Find user only if they belong to admin's organization
+    const user = await User.findOne({
+      _id: id,
+      organization_id: req.user.organization_id
+    })
       .select('-password_hash')
       .lean();
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        error: "User not found"
+        error: "User not found in your organization"
       });
     }
 
@@ -163,13 +178,26 @@ export async function updateUser(req, res) {
     const { id } = req.params;
     const updates = req.body;
 
+    // Organization Admin: Must have organization_id in token
+    if (!req.user || !req.user.organization_id) {
+      return res.status(403).json({
+        success: false,
+        error: "Access denied. Organization admin token required."
+      });
+    }
+
     // Remove sensitive fields that shouldn't be updated via this endpoint
     delete updates.password_hash;
     delete updates._id;
     delete updates.auth_providers;
+    delete updates.organization_id; // Admin cannot change user's organization
 
-    const user = await User.findByIdAndUpdate(
-      id,
+    // Update only if user belongs to admin's organization
+    const user = await User.findOneAndUpdate(
+      { 
+        _id: id,
+        organization_id: req.user.organization_id 
+      },
       { ...updates, updated_at: new Date() },
       { new: true, runValidators: true }
     ).select('-password_hash');
@@ -177,7 +205,7 @@ export async function updateUser(req, res) {
     if (!user) {
       return res.status(404).json({
         success: false,
-        error: "User not found"
+        error: "User not found in your organization"
       });
     }
 
@@ -200,12 +228,24 @@ export async function deleteUser(req, res) {
   try {
     const { id } = req.params;
 
-    // Check if user exists
-    const user = await User.findById(id);
+    // Organization Admin: Must have organization_id in token
+    if (!req.user || !req.user.organization_id) {
+      return res.status(403).json({
+        success: false,
+        error: "Access denied. Organization admin token required."
+      });
+    }
+
+    // Check if user exists AND belongs to admin's organization
+    const user = await User.findOne({ 
+      _id: id,
+      organization_id: req.user.organization_id 
+    });
+    
     if (!user) {
       return res.status(404).json({
         success: false,
-        error: "User not found"
+        error: "User not found in your organization"
       });
     }
 
@@ -246,15 +286,23 @@ export async function deleteUser(req, res) {
   }
 }
 
-// GET /api/admin/users/stats - Get overall user statistics
+// GET /api/admin/users/stats - Get user statistics for admin's organization
 export async function getUsersStats(req, res) {
   try {
-    // Build query filter based on admin type
-    const baseQuery = {};
-    if (req.user && req.user.organization_id) {
-      baseQuery.organization_id = req.user.organization_id;
-      console.log(`🔒 Admin filtering stats by organization: ${req.user.organization_id}`);
+    // Organization Admin: Must have organization_id in token
+    if (!req.user || !req.user.organization_id) {
+      return res.status(403).json({
+        success: false,
+        error: "Access denied. Organization admin token required."
+      });
     }
+
+    // Build query filter - ONLY for admin's organization
+    const baseQuery = {
+      organization_id: req.user.organization_id
+    };
+    
+    console.log(`🔒 Admin fetching stats for organization: ${req.user.organization_id}`);
 
     const [
       totalUsers,
@@ -273,26 +321,14 @@ export async function getUsersStats(req, res) {
       })
     ]);
 
-    // Get total conversations, prompts, files for organization users
-    let totalConversations, totalPrompts, totalFiles;
+    // Get total conversations, prompts, files for organization's users only
+    const orgUserIds = await User.find(baseQuery).distinct('_id');
     
-    if (req.user && req.user.organization_id) {
-      // For org admins, count content only for their organization's users
-      const orgUserIds = await User.find(baseQuery).distinct('_id');
-      
-      [totalConversations, totalPrompts, totalFiles] = await Promise.all([
-        Conversation.countDocuments({ user_id: { $in: orgUserIds } }),
-        SavedPrompt.countDocuments({ user_id: { $in: orgUserIds } }),
-        FileMeta.countDocuments({ user_id: { $in: orgUserIds } })
-      ]);
-    } else {
-      // For super admins, count all content
-      [totalConversations, totalPrompts, totalFiles] = await Promise.all([
-        Conversation.countDocuments({}),
-        SavedPrompt.countDocuments({}),
-        FileMeta.countDocuments({})
-      ]);
-    }
+    const [totalConversations, totalPrompts, totalFiles] = await Promise.all([
+      Conversation.countDocuments({ user_id: { $in: orgUserIds } }),
+      SavedPrompt.countDocuments({ user_id: { $in: orgUserIds } }),
+      FileMeta.countDocuments({ user_id: { $in: orgUserIds } })
+    ]);
 
     res.json({
       success: true,
@@ -319,10 +355,18 @@ export async function getUsersStats(req, res) {
   }
 }
 
-// POST /api/admin/users - Create a new user
+// POST /api/admin/users - Create a new user in admin's organization
 export async function createUser(req, res) {
   try {
-    const { name, email, role, organization_id, employee_details } = req.body;
+    const { name, email, role, employee_details } = req.body;
+
+    // Organization Admin: Must have organization_id in token
+    if (!req.user || !req.user.organization_id) {
+      return res.status(403).json({
+        success: false,
+        error: "Access denied. Organization admin token required."
+      });
+    }
 
     // Validate required fields
     if (!name || !email) {
@@ -341,16 +385,18 @@ export async function createUser(req, res) {
       });
     }
 
-    // Create user data
+    // Create user data - Force admin's organization_id
     const userData = {
       name: name.trim(),
       email: email.toLowerCase().trim(),
       role: role || 'employee',
       status: 'active',
       email_verified: false,
-      organization_id: organization_id || null,
+      organization_id: req.user.organization_id, // Always use admin's org
       employee_details: employee_details || {}
     };
+    
+    console.log(`🔒 Admin creating user for organization: ${req.user.organization_id}`);
 
     // Create user with default settings
     const { createUserWithDefaults } = await import('../models/user.models.js');
@@ -381,10 +427,18 @@ export async function createUser(req, res) {
   }
 }
 
-// POST /api/admin/users/bulk - Create multiple users
+// POST /api/admin/users/bulk - Create multiple users in admin's organization
 export async function createBulkUsers(req, res) {
   try {
-    const { users, organization_id } = req.body;
+    const { users } = req.body;
+
+    // Organization Admin: Must have organization_id in token
+    if (!req.user || !req.user.organization_id) {
+      return res.status(403).json({
+        success: false,
+        error: "Access denied. Organization admin token required."
+      });
+    }
 
     if (!Array.isArray(users) || users.length === 0) {
       return res.status(400).json({
@@ -392,6 +446,8 @@ export async function createBulkUsers(req, res) {
         error: "Users array is required and must not be empty"
       });
     }
+    
+    console.log(`🔒 Admin bulk creating users for organization: ${req.user.organization_id}`);
 
     const results = {
       success: [],
@@ -429,14 +485,14 @@ export async function createBulkUsers(req, res) {
           continue;
         }
 
-        // Create user data
+        // Create user data - Force admin's organization_id
         const newUserData = {
           name: userData.name.trim(),
           email: userData.email.toLowerCase().trim(),
           role: userData.role || 'employee',
           status: 'active',
           email_verified: false,
-          organization_id: organization_id || null,
+          organization_id: req.user.organization_id, // Always use admin's org
           employee_details: {
             department: userData.department || '',
             job_title: userData.job_title || '',
